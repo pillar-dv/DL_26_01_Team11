@@ -85,7 +85,7 @@ df_24_25_pivot = df_24_25.pivot_table(
 
 # 최종 발전량 데이터 통합
 power_df = pd.concat([df_23, df_24_25_pivot], ignore_index=True)
-power_df['일시'] = pd.to_datetime(power_df['거래일자']) + pd.to_timedelta(power_df['거래시간'], unit='h')
+power_df['일시'] = pd.to_datetime(power_df['거래일자']) + pd.to_timedelta(power_df['거래시간']-1, unit='h')
 power_df = power_df.drop(['거래일자', '거래시간'], axis=1)
 
 # 풍력 및 미세먼지 추가 처리
@@ -99,7 +99,7 @@ def process_wind_plant(df, plant_name):
         var_name='시간', 
         value_name=f'{plant_name}_발전량'
     )
-    melted['일시'] = pd.to_datetime(melted['년월일']) + pd.to_timedelta(melted['시간'].astype(int), unit='h')
+    melted['일시'] = pd.to_datetime(melted['년월일']) + pd.to_timedelta(melted['시간'].astype(int)-1, unit='h')
     return melted[['일시', f'{plant_name}_발전량']]
 
 ss_power = process_wind_plant(windPower_ss_130101_260331, '성산')
@@ -195,6 +195,9 @@ if not solar_integrated.empty: solar_integrated = preprocess_time_series(solar_i
 wind_integrated = build_integrated_dataset(power_df_wind, '풍력', wind_mapping)
 if not wind_integrated.empty: wind_integrated = preprocess_time_series(wind_integrated)
 
+solar_integrated = solar_integrated.sort_values(by=['지역', '일시']).reset_index(drop=True)
+wind_integrated = wind_integrated.sort_values(by=['지역', '일시']).reset_index(drop=True)
+
 # CSV 저장
 solar_integrated.to_csv('solar_integrated_dataset.csv', index=False, encoding='utf-8-sig')
 wind_integrated.to_csv('wind_integrated_dataset.csv', index=False, encoding='utf-8-sig')
@@ -229,7 +232,7 @@ y_train_tensor = torch.tensor(y_train_np, dtype=torch.float32)
 X_test_tensor = torch.tensor(X_test_np, dtype=torch.float32)
 y_test_tensor = torch.tensor(y_test_np, dtype=torch.float32)
 
-train_loader = DataLoader(TensorDataset(X_train_tensor, y_train_tensor), batch_size=64, shuffle=False)
+train_loader = DataLoader(TensorDataset(X_train_tensor, y_train_tensor), batch_size=64, shuffle=True)
 test_loader = DataLoader(TensorDataset(X_test_tensor, y_test_tensor), batch_size=64, shuffle=False)
 
 print("PyTorch 텐서 변환 및 DataLoader 생성 완료")
