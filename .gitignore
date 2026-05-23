@@ -1,2 +1,3 @@
 *.csv
 settings.json
+*.pth
