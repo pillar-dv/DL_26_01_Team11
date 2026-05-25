@@ -350,7 +350,6 @@ DROPOUT     = 0.3            # 0.2 → 0.3 과적합 방지
 EPOCHS      = 200            # Early Stopping이 알아서 멈추니까 넉넉하게
 LR          = 0.001
 
-feature/code1
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
