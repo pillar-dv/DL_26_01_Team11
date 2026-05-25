@@ -1,0 +1,8 @@
+[theme]
+# 대시보드의 메인 포인트 컬러 (탭 밑줄, 슬라이더 게이지 및 손잡이 색상)
+primaryColor = "#007BFF"
+
+# 사이드바 및 배경색 설정 (원하는 경우 조정 가능)
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8F9FA"
+textColor = "#212529"
