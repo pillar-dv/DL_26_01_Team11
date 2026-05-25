@@ -350,7 +350,11 @@ DROPOUT     = 0.3            # 0.2 → 0.3 과적합 방지
 EPOCHS      = 200            # Early Stopping이 알아서 멈추니까 넉넉하게
 LR          = 0.001
 
+feature/code1
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 '''
 import torch
 import torch_directml
@@ -359,15 +363,15 @@ import torch_directml
 try:
     import torch_directml
     device = torch_directml.device()
-    print(f"🚀 AMD GPU 가속 활성화: {torch_directml.device_name(0)}")
+    print(f"AMD GPU 가속 활성화: {torch_directml.device_name(0)}")
 except:
     device = torch.device("cpu")
-    print("⚠️ torch-directml이 설치되지 않아 CPU로 실행됩니다.")
+    print("torch-directml이 설치되지 않아 CPU로 실행됩니다.")
 '''
-'''
+
 device = torch.device("cpu")
-print("🚀 CPU 모드로 안전하게 학습/추론을 진행합니다.")
-'''
+print("CPU 모드로 안전하게 학습/추론을 진행합니다.")
+
 
 model     = LSTMModel(INPUT_SIZE, HIDDEN_SIZE, NUM_LAYERS, OUTPUT_SIZE, DROPOUT).to(device)
 criterion = nn.MSELoss()
