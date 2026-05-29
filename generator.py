@@ -265,63 +265,6 @@ all_X = np.concatenate(scaled_X_list, axis=0)
 all_y = np.concatenate(scaled_y_list, axis=0)
 region_labels = np.array(region_labels)
 
-# ── 2단계: 지역별 시퀀스 생성 후 합치기 ──────────
-X_train_list, y_train_list = [], []
-X_val_list,   y_val_list   = [], []
-X_test_list,  y_test_list  = [], []
-train_label_list, val_label_list, test_label_list = [], [], []
-
-for region in solar_df['지역'].unique():
-    region_mask = (region_labels == region)
-    region_X = all_X[region_mask]
-    region_y = all_y[region_mask]
-
-    if len(region_X) < 25:
-        continue
-
-    X_seq, y_seq = create_dataset(region_X, region_y, 24)
-    if len(X_seq) < 10:
-        continue
-
-    n = len(X_seq)
-    t_end = int(n * 0.7)
-    v_end = int(n * 0.8)
-
-    X_train_list.append(X_seq[:t_end])
-    y_train_list.append(y_seq[:t_end])
-    X_val_list.append(X_seq[t_end:v_end])
-    y_val_list.append(y_seq[t_end:v_end])
-    X_test_list.append(X_seq[v_end:])
-    y_test_list.append(y_seq[v_end:])
-
-    train_label_list.extend([region] * t_end)
-    val_label_list.extend([region]   * (v_end - t_end))
-    test_label_list.extend([region]  * (n - v_end))
-
-# ── 3단계: 합치기 & 텐서 변환 ────────────────────
-X_train_np = np.concatenate(X_train_list, axis=0)
-y_train_np = np.concatenate(y_train_list, axis=0)
-X_val_np   = np.concatenate(X_val_list,   axis=0)
-y_val_np   = np.concatenate(y_val_list,   axis=0)
-X_test_np  = np.concatenate(X_test_list,  axis=0)
-y_test_np  = np.concatenate(y_test_list,  axis=0)
-
-test_region_labels = np.array(test_label_list)
-
-X_train_tensor = torch.tensor(X_train_np, dtype=torch.float32)
-y_train_tensor = torch.tensor(y_train_np, dtype=torch.float32)
-X_val_tensor   = torch.tensor(X_val_np,   dtype=torch.float32)
-y_val_tensor   = torch.tensor(y_val_np,   dtype=torch.float32)
-X_test_tensor  = torch.tensor(X_test_np,  dtype=torch.float32)
-y_test_tensor  = torch.tensor(y_test_np,  dtype=torch.float32)
-
-train_loader = DataLoader(TensorDataset(X_train_tensor, y_train_tensor), batch_size=64, shuffle=True)   # False → True
-val_loader   = DataLoader(TensorDataset(X_val_tensor,   y_val_tensor),   batch_size=64, shuffle=False)
-test_loader  = DataLoader(TensorDataset(X_test_tensor,  y_test_tensor),  batch_size=64, shuffle=False)
-
-print(f"지역 수: {len(scalers_X)}개")
-print(f"train: {len(X_train_np)} | val: {len(X_val_np)} | test: {len(X_test_np)}")
-print("지역별 스케일링 및 DataLoader 생성 완료")
 
 # ── LSTM 모델 정의 ────────────────────────────────
 class LSTMModel(nn.Module):
@@ -338,406 +281,308 @@ class LSTMModel(nn.Module):
 
     def forward(self, x):
         out, _ = self.lstm(x)
-        out = self.fc(out[:, -1, :])
-        return out
+        return self.fc(out[:, -1, :])
 
 # ── 하이퍼파라미터 ────────────────────────────────
-INPUT_SIZE  = len(features)  # 일사량 추가로 7개
 HIDDEN_SIZE = 128
 NUM_LAYERS  = 2
 OUTPUT_SIZE = 1
-DROPOUT     = 0.3            # 0.2 → 0.3 과적합 방지
-EPOCHS      = 200            # Early Stopping이 알아서 멈추니까 넉넉하게
+DROPOUT     = 0.3
+EPOCHS      = 200
 LR          = 0.001
 
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-'''
-import torch
-import torch_directml
-'''
-'''
-try:
-    import torch_directml
-    device = torch_directml.device()
-    print(f"AMD GPU 가속 활성화: {torch_directml.device_name(0)}")
-except:
-    device = torch.device("cpu")
-    print("torch-directml이 설치되지 않아 CPU로 실행됩니다.")
-'''
-
-device = torch.device("cpu")
-print("CPU 모드로 안전하게 학습/추론을 진행합니다.")
-
-
-model     = LSTMModel(INPUT_SIZE, HIDDEN_SIZE, NUM_LAYERS, OUTPUT_SIZE, DROPOUT).to(device)
+print(f"사용 디바이스: {device}")
 criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=LR)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=5, factor=0.5)
-
-# ── 학습 + Early Stopping ─────────────────────────
-print("\n학습 시작...")
-train_losses, val_losses = [], []
-
-best_val_loss = float('inf')
-patience      = 20
-counter       = 0
-best_epoch    = 0
-
-for epoch in range(EPOCHS):
-    model.train()
-    train_loss = 0
-    for X_batch, y_batch in train_loader:
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        optimizer.zero_grad()
-        pred = model(X_batch)
-        loss = criterion(pred, y_batch)
-        loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
-        train_loss += loss.item()
-
-    model.eval()
-    val_loss = 0
-    with torch.no_grad():
-        for X_batch, y_batch in val_loader:  # test_loader → val_loader
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-            pred = model(X_batch)
-            val_loss += criterion(pred, y_batch).item()
-
-    train_loss /= len(train_loader)
-    val_loss   /= len(val_loader)    # test_loader → val_loader
-
-    train_losses.append(train_loss)
-    val_losses.append(val_loss)
-    scheduler.step(val_loss)
-
-    if (epoch + 1) % 10 == 0:
-        print(f"Epoch [{epoch+1}/{EPOCHS}] Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Best: {best_val_loss:.4f} | Patience: {counter}/{patience}")
-
-    # Early Stopping 체크
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        best_epoch    = epoch + 1
-        counter       = 0
-        torch.save(model.state_dict(), os.path.join(DATASET_PATH, 'best_model.pth'))
-    else:
-        counter += 1
-        if counter >= patience:
-            print(f"\nEarly Stopping! epoch {epoch+1}에서 중단 (최적 epoch: {best_epoch})")
-            break
-
-# 최적 모델 복원
-model.load_state_dict(torch.load(os.path.join(DATASET_PATH, 'best_model.pth'), map_location=device))
-
-# 스케일러 파일로 저장 (추론 시 사용)
-joblib.dump(scalers_X, os.path.join(DATASET_PATH, 'scalers_X_solar.pkl'))
-joblib.dump(scalers_y, os.path.join(DATASET_PATH, 'scalers_y_solar.pkl'))
-print(f"최적 모델 로드 완료 (Best Val Loss: {best_val_loss:.4f})")
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-# ── 예측 ──────────────────────────────────────────
-model.eval()
-preds_scaled, actuals_scaled = [], []
+# ── 태양광 지역별 모델 학습 ───────────────────────
+print("\n태양광 지역별 모델 학습 시작...")
+solar_models              = {}
+solar_train_losses        = {}
+solar_val_losses          = {}
+solar_preds_actual_dict   = {}
+solar_actuals_actual_dict = {}
+solar_mae_dict, solar_rmse_dict, solar_r2_dict, solar_mape_dict = {}, {}, {}, {}
 
-with torch.no_grad():
-    for X_batch, y_batch in test_loader:
-        X_batch = X_batch.to(device)
-        pred = model(X_batch).cpu().numpy()
-        preds_scaled.append(pred)
-        actuals_scaled.append(y_batch.numpy())
-
-preds_scaled   = np.concatenate(preds_scaled)
-actuals_scaled = np.concatenate(actuals_scaled)
-
-# ── 지역별 역변환 ─────────────────────────────────
-test_region_labels = np.array(test_label_list)
-
-preds_actual   = np.zeros_like(preds_scaled)
-actuals_actual = np.zeros_like(actuals_scaled)
-
-for region, scaler_y in scalers_y.items():
-    mask = (test_region_labels == region)
-    if mask.sum() == 0:
-        continue
-    preds_actual[mask]   = scaler_y.inverse_transform(preds_scaled[mask])
-    actuals_actual[mask] = scaler_y.inverse_transform(actuals_scaled[mask])
-
-# ── 평가 ──────────────────────────────────────────
-mae  = mean_absolute_error(actuals_actual, preds_actual)
-rmse = np.sqrt(mean_squared_error(actuals_actual, preds_actual))
-r2   = r2_score(actuals_actual, preds_actual)
-mask_solar = actuals_actual.flatten() > 50   # 실제값 50 MWh 이하 제외
-mape = np.mean(np.abs((actuals_actual[mask_solar] - preds_actual[mask_solar]) / actuals_actual[mask_solar])) * 100
-
-print("\n===== 평가 결과 =====")
-print(f"MAE  : {mae:.4f} MWh")
-print(f"RMSE : {rmse:.4f} MWh")
-print(f"R²   : {r2:.4f}")
-print(f"MAPE : {mape:.2f}% (실제값 50Mwh 초과 구간 기준)")
-
-# ── 시각화 ────────────────────────────────────────
-# ── 태양광 전체 지역 시각화 ───────────────────────
-regions_to_plot = [r for r in scalers_y.keys() 
-                   if (test_region_labels == r).sum() > 0]
-
-fig, axes = plt.subplots(len(regions_to_plot), 2, figsize=(14, 4 * len(regions_to_plot)))
-
-if len(regions_to_plot) == 1:
-    axes = [axes]
-
-for i, region in enumerate(regions_to_plot):
-    mask_plot = test_region_labels == region
-
-    axes[i][0].plot(train_losses, label="Train Loss")
-    axes[i][0].plot(val_losses,   label="Val Loss")
-    axes[i][0].set_title(f"{region} 학습 손실 곡선")
-    axes[i][0].set_xlabel("Epoch")
-    axes[i][0].set_ylabel("MSE Loss")
-    axes[i][0].legend()
-
-    axes[i][1].plot(actuals_actual[mask_plot][:300], label="실제값", alpha=0.7)
-    axes[i][1].plot(preds_actual[mask_plot][:300],   label="예측값", alpha=0.7)
-    axes[i][1].set_title(f"{region} 태양광 실제 vs 예측 (처음 300개)")
-    axes[i][1].set_xlabel("Time Step")
-    axes[i][1].set_ylabel("발전량 (MWh)")
-    axes[i][1].legend()
-
-plt.tight_layout()
-plt.savefig(os.path.join(DATASET_PATH, "lstm_result_solar_all.png"), dpi=150)
-plt.close()
-print("태양광 전체 지역 시각화 저장 완료")
-
-# ── 풍력 데이터 준비 ──────────────────────────────
-wind_df = pd.read_csv(os.path.join(DATASET_PATH, 'wind_integrated_dataset.csv'), encoding='utf-8-sig')
-wind_df['일시'] = pd.to_datetime(wind_df['일시'])
-
-# 제주도 데이터 제외 및 풍속 세제곱 피처 추가
-wind_df = wind_df[wind_df['지역'] != '제주도'].reset_index(drop=True)
-wind_df['풍속_세제곱'] = wind_df['풍속(m/s)'] ** 3
-
-features_wind = ['기온(°C)', '풍속(m/s)', '풍속_세제곱', '풍향(16방위)', '습도(%)', '현지기압(hPa)', '전운량(10분위)', '시간', '월']
-target_wind   = '전력거래량(MWh)'
-
-# 풍력 지역별 스케일링
-scalers_X_wind = {}
-scalers_y_wind = {}
-scaled_X_wind_list = []
-scaled_y_wind_list = []
-region_labels_wind = []
-
-for region in wind_df['지역'].unique():
-    mask = wind_df['지역'] == region
-    region_df = wind_df[mask].copy()
-    region_df = region_df.sort_values('일시').reset_index(drop=True)
-    if len(region_df) < 25:
-        continue
-
-    n = len(region_df)
-    train_end_r = int(n * 0.7)
-
-    train_df = region_df.iloc[:train_end_r]
-
-    scaler_X = MinMaxScaler()
-    scaler_y = MinMaxScaler()
-
-    scaler_X.fit(train_df[features_wind])
-    scaler_y.fit(train_df[[target_wind]])
-
-    scaled_X = scaler_X.transform(region_df[features_wind])
-    scaled_y = scaler_y.transform(region_df[[target_wind]])
-
-    scalers_X_wind[region] = scaler_X
-    scalers_y_wind[region] = scaler_y
-    scaled_X_wind_list.append(scaled_X)
-    scaled_y_wind_list.append(scaled_y)
-    region_labels_wind.extend([region] * len(region_df))
-
-all_X_wind = np.concatenate(scaled_X_wind_list, axis=0)
-all_y_wind = np.concatenate(scaled_y_wind_list, axis=0)
-region_labels_wind = np.array(region_labels_wind)
-
-print(f"풍력 지역 수: {len(scalers_X_wind)}개")
-print(f"풍력 전체 데이터 수: {len(all_X_wind)}행")
-
-# ── 풍력 시퀀스 생성 및 train/val/test 분리 ──────
-# ── 풍력 지역별 시퀀스 생성 후 합치기 ────────────
-X_train_wind_list, y_train_wind_list = [], []
-X_val_wind_list,   y_val_wind_list   = [], []
-X_test_wind_list,  y_test_wind_list  = [], []
-train_label_wind_list, val_label_wind_list, test_label_wind_list = [], [], []
-
-for region in wind_df['지역'].unique():
-    region_mask = (region_labels_wind == region)
-    region_X = all_X_wind[region_mask]
-    region_y = all_y_wind[region_mask]
-
-    if len(region_X) < 25:
-        continue
+for region in solar_df['지역'].unique():
+    region_mask = (region_labels == region)
+    region_X    = all_X[region_mask]
+    region_y    = all_y[region_mask]
+    if len(region_X) < 25: continue
 
     X_seq, y_seq = create_dataset(region_X, region_y, 24)
-    if len(X_seq) < 10:
-        continue
+    if len(X_seq) < 10: continue
 
-    n = len(X_seq)
+    n     = len(X_seq)
     t_end = int(n * 0.7)
     v_end = int(n * 0.8)
 
-    X_train_wind_list.append(X_seq[:t_end])
-    y_train_wind_list.append(y_seq[:t_end])
-    X_val_wind_list.append(X_seq[t_end:v_end])
-    y_val_wind_list.append(y_seq[t_end:v_end])
-    X_test_wind_list.append(X_seq[v_end:])
-    y_test_wind_list.append(y_seq[v_end:])
+    train_loader_r = DataLoader(TensorDataset(
+        torch.tensor(X_seq[:t_end],      dtype=torch.float32),
+        torch.tensor(y_seq[:t_end],      dtype=torch.float32)
+    ), batch_size=64, shuffle=True)
+    val_loader_r   = DataLoader(TensorDataset(
+        torch.tensor(X_seq[t_end:v_end], dtype=torch.float32),
+        torch.tensor(y_seq[t_end:v_end], dtype=torch.float32)
+    ), batch_size=64, shuffle=False)
+    test_loader_r  = DataLoader(TensorDataset(
+        torch.tensor(X_seq[v_end:],      dtype=torch.float32),
+        torch.tensor(y_seq[v_end:],      dtype=torch.float32)
+    ), batch_size=64, shuffle=False)
 
-    train_label_wind_list.extend([region] * t_end)
-    val_label_wind_list.extend([region]   * (v_end - t_end))
-    test_label_wind_list.extend([region]  * (n - v_end))
+    model_r     = LSTMModel(len(features), HIDDEN_SIZE, NUM_LAYERS, OUTPUT_SIZE, DROPOUT).to(device)
+    optimizer_r = optim.Adam(model_r.parameters(), lr=LR)
+    scheduler_r = optim.lr_scheduler.ReduceLROnPlateau(optimizer_r, mode='min', patience=5, factor=0.5)
 
-X_train_wind = torch.tensor(np.concatenate(X_train_wind_list), dtype=torch.float32)
-y_train_wind = torch.tensor(np.concatenate(y_train_wind_list), dtype=torch.float32)
-X_val_wind   = torch.tensor(np.concatenate(X_val_wind_list),   dtype=torch.float32)
-y_val_wind   = torch.tensor(np.concatenate(y_val_wind_list),   dtype=torch.float32)
-X_test_wind  = torch.tensor(np.concatenate(X_test_wind_list),  dtype=torch.float32)
-y_test_wind  = torch.tensor(np.concatenate(y_test_wind_list),  dtype=torch.float32)
+    train_losses_r, val_losses_r            = [], []
+    best_val_r, counter_r, best_epoch_r     = float('inf'), 0, 0
 
-test_region_labels_wind = np.array(test_label_wind_list)
-
-train_loader_wind = DataLoader(TensorDataset(X_train_wind, y_train_wind), batch_size=64, shuffle=True)   # False → True
-val_loader_wind   = DataLoader(TensorDataset(X_val_wind,   y_val_wind),   batch_size=64, shuffle=False)
-test_loader_wind  = DataLoader(TensorDataset(X_test_wind,  y_test_wind),  batch_size=64, shuffle=False)
-
-print(f"풍력 지역 수: {len(scalers_X_wind)}개")
-print(f"train: {len(X_train_wind)} | val: {len(X_val_wind)} | test: {len(X_test_wind)}")
-
-# ── 풍력 모델 학습 ────────────────────────────────
-print("\n풍력 모델 학습 시작...")
-model_wind     = LSTMModel(len(features_wind), HIDDEN_SIZE, NUM_LAYERS, OUTPUT_SIZE, DROPOUT).to(device)
-optimizer_wind = optim.Adam(model_wind.parameters(), lr=0.0005)  # 0.001 → 0.0005
-scheduler_wind = optim.lr_scheduler.ReduceLROnPlateau(optimizer_wind, mode='min', patience=5, factor=0.5)
-
-train_losses_wind, val_losses_wind = [], []
-best_val_loss_wind = float('inf')
-patience_wind, counter_wind = 20, 0  # 10 → 20
-best_epoch_wind = 0
-
-for epoch in range(EPOCHS):
-    model_wind.train()
-    train_loss = 0
-    for X_batch, y_batch in train_loader_wind:
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        optimizer_wind.zero_grad()
-        pred = model_wind(X_batch)
-        loss = criterion(pred, y_batch)
-        loss.backward()
-        nn.utils.clip_grad_norm_(model_wind.parameters(), max_norm=1.0)
-        optimizer_wind.step()
-        train_loss += loss.item()
-
-    model_wind.eval()
-    val_loss = 0
-    with torch.no_grad():
-        for X_batch, y_batch in val_loader_wind:
+    for epoch in range(EPOCHS):
+        model_r.train()
+        train_loss = 0
+        for X_batch, y_batch in train_loader_r:
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-            pred = model_wind(X_batch)
-            val_loss += criterion(pred, y_batch).item()
+            optimizer_r.zero_grad()
+            loss = criterion(model_r(X_batch), y_batch)
+            loss.backward()
+            nn.utils.clip_grad_norm_(model_r.parameters(), max_norm=1.0)
+            optimizer_r.step()
+            train_loss += loss.item()
 
-    train_loss /= len(train_loader_wind)
-    val_loss   /= len(val_loader_wind)
-    train_losses_wind.append(train_loss)
-    val_losses_wind.append(val_loss)
-    scheduler_wind.step(val_loss)
+        model_r.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for X_batch, y_batch in val_loader_r:
+                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+                val_loss += criterion(model_r(X_batch), y_batch).item()
 
-    if (epoch + 1) % 10 == 0:
-        print(f"Epoch [{epoch+1}/{EPOCHS}] Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Best: {best_val_loss_wind:.4f} | Patience: {counter_wind}/{patience_wind}")
+        train_loss /= len(train_loader_r)
+        val_loss   /= len(val_loader_r)
+        train_losses_r.append(train_loss)
+        val_losses_r.append(val_loss)
+        scheduler_r.step(val_loss)
 
-    if val_loss < best_val_loss_wind:
-        best_val_loss_wind = val_loss
-        best_epoch_wind    = epoch + 1
-        counter_wind       = 0
-        torch.save(model_wind.state_dict(), os.path.join(DATASET_PATH, 'best_model_wind.pth'))
-    else:
-        counter_wind += 1
-        if counter_wind >= patience_wind:
-            print(f"\nEarly Stopping! epoch {epoch+1}에서 중단 (최적 epoch: {best_epoch_wind})")
-            break
+        if val_loss < best_val_r:
+            best_val_r, best_epoch_r, counter_r = val_loss, epoch + 1, 0
+            torch.save(model_r.state_dict(), os.path.join(DATASET_PATH, f'best_model_solar_{region}.pth'))
+        else:
+            counter_r += 1
+            if counter_r >= 20:
+                print(f"  {region} Early Stopping at epoch {epoch+1} (최적: {best_epoch_r})")
+                break
 
-model_wind.load_state_dict(torch.load(os.path.join(DATASET_PATH, 'best_model_wind.pth'), map_location=device))
-print(f"풍력 최적 모델 로드 완료 (Best Val Loss: {best_val_loss_wind:.4f})")
+    model_r.load_state_dict(torch.load(
+        os.path.join(DATASET_PATH, f'best_model_solar_{region}.pth'), map_location=device))
+    solar_models[region]       = model_r
+    solar_train_losses[region] = train_losses_r
+    solar_val_losses[region]   = val_losses_r
 
-# 풍력 최적 모델 스케일러 저장
-joblib.dump(scalers_X_wind, os.path.join(DATASET_PATH, 'scalers_X_wind.pkl'))
-joblib.dump(scalers_y_wind, os.path.join(DATASET_PATH, 'scalers_y_wind.pkl'))
+    model_r.eval()
+    preds_s, actuals_s = [], []
+    with torch.no_grad():
+        for X_batch, y_batch in test_loader_r:
+            preds_s.append(model_r(X_batch.to(device)).cpu().numpy())
+            actuals_s.append(y_batch.numpy())
 
-# ── 풍력 평가 ─────────────────────────────────────
-model_wind.eval()
-preds_scaled_wind, actuals_scaled_wind = [], []
+    preds_s   = scalers_y[region].inverse_transform(np.concatenate(preds_s))
+    actuals_s = scalers_y[region].inverse_transform(np.concatenate(actuals_s))
 
-with torch.no_grad():
-    for X_batch, y_batch in test_loader_wind:
-        X_batch = X_batch.to(device)
-        pred = model_wind(X_batch).cpu().numpy()
-        preds_scaled_wind.append(pred)
-        actuals_scaled_wind.append(y_batch.numpy())
+    solar_preds_actual_dict[region]   = preds_s
+    solar_actuals_actual_dict[region] = actuals_s
 
-preds_scaled_wind   = np.concatenate(preds_scaled_wind)
-actuals_scaled_wind = np.concatenate(actuals_scaled_wind)
+    mask_50 = actuals_s.flatten() > 50
+    solar_mae_dict[region]  = mean_absolute_error(actuals_s, preds_s)
+    solar_rmse_dict[region] = np.sqrt(mean_squared_error(actuals_s, preds_s))
+    solar_r2_dict[region]   = r2_score(actuals_s, preds_s)
+    solar_mape_dict[region] = np.mean(np.abs(
+        (actuals_s[mask_50] - preds_s[mask_50]) / actuals_s[mask_50]
+    )) * 100 if mask_50.sum() > 0 else float('nan')
 
-test_region_labels_wind = np.array(test_label_wind_list)
+    print(f"  {region} 완료 | MAE: {solar_mae_dict[region]:.2f} | R²: {solar_r2_dict[region]:.4f} | Best Val: {best_val_r:.4f}")
 
-preds_actual_wind   = np.zeros_like(preds_scaled_wind)
-actuals_actual_wind = np.zeros_like(actuals_scaled_wind)
+# ── 스케일러 저장 ─────────────────────────────────
+joblib.dump(scalers_X, os.path.join(DATASET_PATH, 'scalers_X_solar.pkl'))
+joblib.dump(scalers_y, os.path.join(DATASET_PATH, 'scalers_y_solar.pkl'))
 
-for region, scaler_y in scalers_y_wind.items():
-    mask = (test_region_labels_wind == region)
-    if mask.sum() == 0:
+# ── 전체 통합 평가 ────────────────────────────────
+all_preds_s   = np.concatenate(list(solar_preds_actual_dict.values()))
+all_actuals_s = np.concatenate(list(solar_actuals_actual_dict.values()))
+mask_50_all   = all_actuals_s.flatten() > 50
+
+print("\n===== 태양광 전체 평가 결과 =====")
+print(f"MAE  : {mean_absolute_error(all_actuals_s, all_preds_s):.4f} MWh")
+print(f"RMSE : {np.sqrt(mean_squared_error(all_actuals_s, all_preds_s)):.4f} MWh")
+print(f"R²   : {r2_score(all_actuals_s, all_preds_s):.4f}")
+print(f"MAPE : {np.mean(np.abs((all_actuals_s[mask_50_all] - all_preds_s[mask_50_all]) / all_actuals_s[mask_50_all])) * 100:.2f}% (50MWh 초과)")
+
+print("\n===== 태양광 지역별 평가 결과 =====")
+for region in solar_mae_dict:
+    print(f"  {region} | MAE: {solar_mae_dict[region]:.2f} | RMSE: {solar_rmse_dict[region]:.2f} | R²: {solar_r2_dict[region]:.4f} | MAPE: {solar_mape_dict[region]:.2f}%")
+
+# ── 태양광 지역별 시각화 ──────────────────────────
+for region in solar_models.keys():
+    region_df_full = solar_df[solar_df['지역'] == region].sort_values('일시').reset_index(drop=True)
+    n_total        = len(region_df_full)
+    test_dates     = region_df_full['일시'].iloc[int(n_total * 0.8):].reset_index(drop=True)
+    n_plot         = min(300, len(solar_actuals_actual_dict[region]))
+    plot_dates     = test_dates[:n_plot]
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+    axes[0].plot(solar_train_losses[region], label="Train Loss")
+    axes[0].plot(solar_val_losses[region],   label="Val Loss")
+    axes[0].set_title(f"{region} 태양광 학습 손실 곡선")
+    axes[0].set_xlabel("Epoch")
+    axes[0].set_ylabel("MSE Loss")
+    axes[0].legend()
+
+    axes[1].plot(plot_dates, solar_actuals_actual_dict[region][:n_plot], label="실제값", alpha=0.7)
+    axes[1].plot(plot_dates, solar_preds_actual_dict[region][:n_plot],   label="예측값", alpha=0.7)
+    axes[1].set_title(f"{region} 태양광 실제 vs 예측")
+    axes[1].set_xlabel("날짜 (시간 단위)")
+    axes[1].set_ylabel("발전량 (MWh)")
+    axes[1].tick_params(axis='x', rotation=45)
+    axes[1].legend()
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(DATASET_PATH, f"lstm_result_solar_{region}.png"), dpi=150)
+    plt.close()
+    print(f"{region} 태양광 시각화 저장 완료")
+
+
+# ── 풍력 XGBoost 데이터 준비 ─────────────────────
+import xgboost as xgb
+
+wind_df = pd.read_csv(os.path.join(DATASET_PATH, 'wind_integrated_dataset.csv'), encoding='utf-8-sig')
+wind_df['일시'] = pd.to_datetime(wind_df['일시'])
+wind_df = wind_df[wind_df['지역'] != '제주도'].reset_index(drop=True)
+
+print(f"풍력 지역: {wind_df['지역'].unique().tolist()}")
+print(f"풍력 전체 데이터 수: {len(wind_df)}행")
+
+features_xgb_wind = [
+    '기온(°C)', '풍속(m/s)', '풍속_세제곱', '풍향(16방위)',
+    '습도(%)', '현지기압(hPa)', '전운량(10분위)',
+    '시간', '월', '요일', '주말여부',
+    'lag_1', 'lag_2', 'lag_3', 'lag_24', 'lag_168',
+    'rolling_mean_6', 'rolling_mean_24', 'rolling_std_24'
+]
+target_wind = '전력거래량(MWh)'
+
+def make_wind_features_xgb(df):
+    df = df.copy().sort_values('일시').reset_index(drop=True)
+    df['풍속_세제곱']     = df['풍속(m/s)'] ** 3
+    df['시간']            = df['일시'].dt.hour
+    df['월']              = df['일시'].dt.month
+    df['요일']            = df['일시'].dt.dayofweek
+    df['주말여부']         = (df['요일'] >= 5).astype(int)
+    df['lag_1']           = df[target_wind].shift(1)
+    df['lag_2']           = df[target_wind].shift(2)
+    df['lag_3']           = df[target_wind].shift(3)
+    df['lag_24']          = df[target_wind].shift(24)
+    df['lag_168']         = df[target_wind].shift(168)
+    df['rolling_mean_6']  = df[target_wind].shift(1).rolling(6).mean()
+    df['rolling_mean_24'] = df[target_wind].shift(1).rolling(24).mean()
+    df['rolling_std_24']  = df[target_wind].shift(1).rolling(24).std()
+    return df.dropna().reset_index(drop=True)
+
+# ── 풍력 지역별 XGBoost 학습 ─────────────────────
+print("\n풍력 XGBoost 지역별 학습 시작...")
+xgb_models                                     = {}
+xgb_preds_actual_dict, xgb_actuals_actual_dict = {}, {}
+xgb_mae_dict, xgb_rmse_dict, xgb_r2_dict, xgb_smape_dict = {}, {}, {}, {}
+
+for region in wind_df['지역'].unique():
+    print(f"\n  {region} 학습 중...")
+    region_df = make_wind_features_xgb(wind_df[wind_df['지역'] == region].copy())
+
+    if len(region_df) < 200:
+        print(f"  {region} 데이터 부족 → 스킵")
         continue
-    preds_actual_wind[mask]   = scaler_y.inverse_transform(preds_scaled_wind[mask])
-    actuals_actual_wind[mask] = scaler_y.inverse_transform(actuals_scaled_wind[mask])
 
-mae_w  = mean_absolute_error(actuals_actual_wind, preds_actual_wind)
-rmse_w = np.sqrt(mean_squared_error(actuals_actual_wind, preds_actual_wind))
-r2_w   = r2_score(actuals_actual_wind, preds_actual_wind)
-mape_w = np.mean(2 * np.abs(actuals_actual_wind - preds_actual_wind) / 
-                 (np.abs(actuals_actual_wind) + np.abs(preds_actual_wind) + 1e-8)) * 100
+    n     = len(region_df)
+    t_end = int(n * 0.7)
+    v_end = int(n * 0.8)
 
-print("\n===== 풍력 평가 결과 =====")
-print(f"MAE  : {mae_w:.4f} MWh")
-print(f"RMSE : {rmse_w:.4f} MWh")
-print(f"R²   : {r2_w:.4f}")
-print(f"sMAPE : {mape_w:.2f}%")
+    X_train = region_df[features_xgb_wind].iloc[:t_end]
+    y_train = region_df[target_wind].iloc[:t_end]
+    X_val   = region_df[features_xgb_wind].iloc[t_end:v_end]
+    y_val   = region_df[target_wind].iloc[t_end:v_end]
+    X_test  = region_df[features_xgb_wind].iloc[v_end:]
+    y_test  = region_df[target_wind].iloc[v_end:]
 
-# ── 풍력 시각화 ───────────────────────────────────
-# ── 풍력 전체 지역 시각화 ────────────────────────
-regions_to_plot_wind = [r for r in scalers_y_wind.keys()
-                        if (test_region_labels_wind == r).sum() > 0]
+    model_xgb = xgb.XGBRegressor(
+        n_estimators          = 1000,
+        learning_rate         = 0.05,
+        max_depth             = 6,
+        subsample             = 0.8,
+        colsample_bytree      = 0.8,
+        reg_alpha             = 0.1,
+        reg_lambda            = 1.0,
+        random_state          = 42,
+        n_jobs                = -1,
+        eval_metric           = 'rmse',
+        early_stopping_rounds = 50
+    )
+    model_xgb.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=100)
 
-fig, axes = plt.subplots(len(regions_to_plot_wind), 2, figsize=(14, 4 * len(regions_to_plot_wind)))
+    preds   = np.maximum(model_xgb.predict(X_test), 0)
+    actuals = y_test.values
 
-if len(regions_to_plot_wind) == 1:
-    axes = [axes]
+    xgb_models[region]              = model_xgb
+    xgb_preds_actual_dict[region]   = preds
+    xgb_actuals_actual_dict[region] = actuals
+    xgb_mae_dict[region]    = mean_absolute_error(actuals, preds)
+    xgb_rmse_dict[region]   = np.sqrt(mean_squared_error(actuals, preds))
+    xgb_r2_dict[region]     = r2_score(actuals, preds)
+    xgb_smape_dict[region]  = np.mean(2 * np.abs(actuals - preds) /
+                              (np.abs(actuals) + np.abs(preds) + 1e-8)) * 100
 
-for i, region in enumerate(regions_to_plot_wind):
-    mask_plot = test_region_labels_wind == region
+    joblib.dump(model_xgb, os.path.join(DATASET_PATH, f'xgb_wind_{region}.pkl'))
+    print(f"  {region} 완료 | MAE: {xgb_mae_dict[region]:.2f} | R²: {xgb_r2_dict[region]:.4f} | sMAPE: {xgb_smape_dict[region]:.2f}%")
 
-    axes[i][0].plot(train_losses_wind, label="Train Loss")
-    axes[i][0].plot(val_losses_wind,   label="Val Loss")
-    axes[i][0].set_title(f"{region} 풍력 학습 손실 곡선")
-    axes[i][0].set_xlabel("Epoch")
-    axes[i][0].set_ylabel("MSE Loss")
-    axes[i][0].legend()
+# ── 전체 평가 ─────────────────────────────────────
+all_preds_w   = np.concatenate(list(xgb_preds_actual_dict.values()))
+all_actuals_w = np.concatenate(list(xgb_actuals_actual_dict.values()))
 
-    axes[i][1].plot(actuals_actual_wind[mask_plot][:300], label="실제값", alpha=0.7)
-    axes[i][1].plot(preds_actual_wind[mask_plot][:300],   label="예측값", alpha=0.7)
-    axes[i][1].set_title(f"{region} 풍력 실제 vs 예측 (처음 300개)")
-    axes[i][1].set_xlabel("Time Step")
-    axes[i][1].set_ylabel("발전량 (MWh)")
-    axes[i][1].legend()
+print("\n===== 풍력 XGBoost 전체 평가 결과 =====")
+print(f"MAE  : {mean_absolute_error(all_actuals_w, all_preds_w):.4f} MWh")
+print(f"RMSE : {np.sqrt(mean_squared_error(all_actuals_w, all_preds_w)):.4f} MWh")
+print(f"R²   : {r2_score(all_actuals_w, all_preds_w):.4f}")
+print(f"sMAPE: {np.mean(2 * np.abs(all_actuals_w - all_preds_w) / (np.abs(all_actuals_w) + np.abs(all_preds_w) + 1e-8)) * 100:.2f}%")
 
-plt.tight_layout()
-plt.savefig(os.path.join(DATASET_PATH, "lstm_result_wind_all.png"), dpi=150)
-plt.close()
-print("풍력 전체 지역 시각화 저장 완료")
+print("\n===== 풍력 XGBoost 지역별 평가 결과 =====")
+for region in xgb_mae_dict:
+    print(f"  {region} | MAE: {xgb_mae_dict[region]:.2f} | RMSE: {xgb_rmse_dict[region]:.2f} | R²: {xgb_r2_dict[region]:.4f} | sMAPE: {xgb_smape_dict[region]:.2f}%")
+
+# ── 풍력 지역별 시각화 ────────────────────────────
+for region in xgb_models.keys():
+    region_df_full = make_wind_features_xgb(wind_df[wind_df['지역'] == region].copy())
+    n_total        = len(region_df_full)
+    test_dates     = region_df_full['일시'].iloc[int(n_total * 0.8):].reset_index(drop=True)
+    n_plot         = min(300, len(xgb_actuals_actual_dict[region]))
+    plot_dates     = test_dates[:n_plot]
+
+    importance = xgb_models[region].feature_importances_
+    sorted_idx = np.argsort(importance)[-10:]
+
+    fig, axes = plt.subplots(1, 2, figsize=(16, 4))
+    axes[0].barh(np.array(features_xgb_wind)[sorted_idx], importance[sorted_idx], color='steelblue')
+    axes[0].set_title(f"{region} 풍력 XGBoost 피처 중요도 (Top 10)")
+    axes[0].set_xlabel("Importance")
+
+    axes[1].plot(plot_dates, xgb_actuals_actual_dict[region][:n_plot], label="실제값", alpha=0.7)
+    axes[1].plot(plot_dates, xgb_preds_actual_dict[region][:n_plot],   label="예측값", alpha=0.7)
+    axes[1].set_title(f"{region} 풍력 XGBoost 실제 vs 예측")
+    axes[1].set_xlabel("날짜 (시간 단위)")
+    axes[1].set_ylabel("발전량 (MWh)")
+    axes[1].tick_params(axis='x', rotation=45)
+    axes[1].legend()
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(DATASET_PATH, f"xgb_result_wind_{region}.png"), dpi=150)
+    plt.close()
+    print(f"{region} 풍력 XGBoost 시각화 저장 완료")
+
+print("\n✅ 전체 학습 완료! (태양광 LSTM 지역별 + 풍력 XGBoost 지역별)")
