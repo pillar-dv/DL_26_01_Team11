@@ -83,6 +83,23 @@ def load_wind_gps_model(stage):
     return model
 
 class PublicSectorPDF(FPDF):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.has_malgun = False
+
+    def add_font(self, family, style="", fname=None, **kwargs):
+        try:
+            super().add_font(family, style, fname, **kwargs)
+            if family.lower() == 'malgun':
+                self.has_malgun = True
+        except Exception as e:
+            raise e
+
+    def set_font(self, family, style="", size=0):
+        if family.lower() == 'malgun' and not self.has_malgun:
+            family = 'Helvetica'
+        super().set_font(family, style, size)
+
     def header(self):
         if self.page_no() > 1:
             self.set_font('Malgun', '', 8)
@@ -90,11 +107,13 @@ class PublicSectorPDF(FPDF):
             self.cell(0, 5, '[대외주의] 신재생에너지 일일 계통 발전 예측 보고서', border=0, ln=1, align='L')
             self.line(15, 20, 195, 20)
             self.ln(5)
+
     def footer(self):
         self.set_y(-15)
         self.set_font('Malgun', '', 9)
         self.set_text_color(100, 100, 100)
         self.cell(0, 10, f'- {self.page_no()} -', border=0, ln=0, align='C')
+
 
 def render_report_tab(wind_df, solar_df):
     st.subheader('📋 공문서 및 공기업 규격 일일 전력 발전 예측 보고서 자동 작성 시스템')
@@ -320,8 +339,14 @@ def render_report_tab(wind_df, solar_df):
                 pdf = PublicSectorPDF(orientation='P', unit='mm', format='A4')
                 pdf.set_margins(15, 15, 15)
                 pdf.set_auto_page_break(auto=False)
-                font_path = r'C:\Windows\Fonts\malgun.ttf'
-                font_bold_path = r'C:\Windows\Fonts\malgunb.ttf'
+                local_font = os.path.join(PROJECT_ROOT, 'src', 'fonts', 'malgun.ttf')
+                local_font_bold = os.path.join(PROJECT_ROOT, 'src', 'fonts', 'malgunbd.ttf')
+                if os.path.exists(local_font):
+                    font_path = local_font
+                    font_bold_path = local_font_bold
+                else:
+                    font_path = r'C:\Windows\Fonts\malgun.ttf'
+                    font_bold_path = r'C:\Windows\Fonts\malgunbd.ttf'
                 try:
                     pdf.add_font('Malgun', style='', fname=font_path)
                 except Exception: pass
@@ -330,6 +355,7 @@ def render_report_tab(wind_df, solar_df):
                 except Exception:
                     try: pdf.add_font('Malgun', style='B', fname=font_path)
                     except Exception: pass
+
                 pdf.add_page()
                 pdf.set_font('Malgun', 'B', 15)
                 pdf.cell(0, 12, '[예측 기안문] 재생에너지 일일 계통 영향 평가 및 조치 계획', border=0, ln=1, align='C')
