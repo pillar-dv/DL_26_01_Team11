@@ -1,170 +1,176 @@
-# Release Note: 신재생 에너지 발전량 예측 모델
+# 🌞💨 기상 데이터 기반 태양광·풍력 발전량 예측 및 모니터링 시스템
 
-## **v1.1 (데이터 전처리 구현 성공)**
+기상 데이터를 활용하여 전국 및 지역별 태양광·풍력 발전량을 예측하고, 이상 탐지 및 PDF 보고서 자동 생성을 지원하는 통합 모니터링 대시보드 시스템입니다.
 
-### 주요 업데이트 및 신규 기능 (Major Updates)
-* **태양광 및 풍력 데이터 파이프라인 완전 분리**
-  * 태양광과 풍력의 발전 특성 및 입지 조건 차이를 반영하여, 전처리 및 통합 데이터셋 생성 로직을 완전히 분리 설계함. 
-  * 최종 산출물이 `solar_integrated_dataset.csv`와 `wind_integrated_dataset.csv` 두 개의 독립적인 파일로 생성되도록 개선.
-* **복수 관측소 기반 듀얼 매핑(Spatial Smoothing) 시스템 도입**
-  * 광역 지자체 단위의 발전량에 대응하기 위해, 단일 기상 관측소가 아닌 지역 내 여러 관측소의 데이터를 리스트로 묶어 시간대별 평균을 산출하는 로직 추가.
-  * 태양광(도심/내륙 위주)과 풍력(해안/고산 위주)의 매핑 딕셔너리를 분리하여 국지적 기상 이상에 따른 예측 노이즈(Noise)를 대폭 감소시킴.
-* **학습 프레임워크 PyTorch 전면 마이그레이션**
-  * PyTorch 기반의 클래스(`nn.Module`) 객체지향형 LSTM 모델로 아키텍처를 선택함.
-  * `TensorDataset` 및 `DataLoader`를 도입하여 배치(Batch) 단위의 시계열 학습 효율성 향상.
+---
 
-### 버그 수정 및 안정화 (Bug Fixes)
-* **데이터 분할 병합 시 `KeyError: '연료원'` 발생 현상 수정**
-  * 데이터 피벗(Pivot) 작업 이후 사라진 '연료원' 컬럼을 참조하여 발생하던 에러 수정.
-  * 태양광/풍력 컬럼을 명시적으로 분리한 뒤, 통일된 타겟 변수명인 `전력거래량(MWh)`으로 이름을 변경하도록 로직 개선.
-* **함수 호출 시 `TypeError` 발생 현상 수정**
-  * `build_integrated_dataset()` 함수가 요구하는 3번째 인자가 누락되던 문제 수정. 
-  * 함수 실행부에 `solar_mapping`과 `wind_mapping` 딕셔너리가 정상적으로 주입되도록 수정.
-* **`preprocess_time_series` 정의 누락 문제 해결**
-  * 주피터 노트북 셀 분할로 인해 발생할 수 있는 함수 참조 에러 방지를 위해, `generator.py` (및 통합 셀) 최상단에 전처리 함수가 선언되도록 실행 순서 통합.
+## 📈 릴리즈 노트 (Release Notes)
 
-### 문서화 및 산출물 (Documentation)
-* **GitHub Repository 업로드용 리소스 추가**
-  * 프로젝트의 개요, 데이터셋 명세, 파이프라인 특징, 실행 방법을 명시한 `README.md` 작성 완료.
-  * 용량 초과 및 민감 데이터 유출을 방지하기 위해 `*.csv` 및 데이터 폴더를 제외하는 `.gitignore` 설정 기준 확립.
+### **v4.0 (웹 대시보드 구축, 보고서 다각화, 폴더 구조 리팩토링 및 배포 최적화)** - *Latest*
+* **Streamlit 기반 통합 웹 대시보드 구축 (`src/main.py`)**
+  * 이상 탐지(Anomaly Detection), 시계열 예측(Seq2Seq), 보고서 생성(Report) 등 모든 기능을 하나의 직관적인 웹 인터페이스로 통합하여 실시간 제어 및 예측 조회가 가능합니다.
+  * **파일철 구분 인덱스 탭 디자인**: 기본 텍스트 탭 대신 실물 종이 파일철의 구분 인덱스 느낌(둥근 상단 모서리, 명확한 검정 테두리, 선택 탭 입체 돌출 효과)으로 커스텀 CSS 스타일링을 적용해 사용자 경험을 극대화했습니다.
+* **다각화된 일일 보고서 자동 생성 및 고밀도 PDF 출력 (`src/ui/report_generator.py`)**
+  * 사용자가 선택한 분량 옵션(2페이지 요약형, 3페이지 표준형, 4페이지 상세형)에 맞춰 본문 콘텐츠가 자동으로 분기 생성됩니다.
+  * FPDF의 좌표 배치 및 여백 조절을 수동으로 정교하게 제어하고, Ramping Rate 섹션의 개행 누락 버그(`ln=1` 누락)를 해결하여 텍스트 잘림 현상 없는 완벽한 고밀도 레이아웃을 보장합니다.
+* **모듈러 기반 폴더 구조 리팩토링**
+  * 스파게티 형태로 산재해 있던 코드들을 역할별(`src/engine`, `src/train`, `src/ui`)로 분류 수납하고, 엔트리포인트를 `src/main.py`로 단일화했습니다.
+  * 복잡하게 얽혀 있던 파일 간 상대 참조 경로를 프로젝트 루트 기준 절대 경로로 전면 보정하여 컴파일 오류를 제거했습니다.
+* **타 PC(교수님 환경) 복제 구동 보장 (Portability Setup)**
+  * `requirements.txt`에 웹 구동 및 PDF 빌드 필수 패키지(`streamlit`, `joblib`, `plotly`, `fpdf2`, `xgboost` 등)를 누락 없이 일괄 명시했습니다.
+  * `.gitignore` 설정을 보완하여 대용량 원본 데이터는 배제하되, 예측 실행에 필수적인 과거 정제 데이터(`data/processed/*.csv`)와 학습 완료된 가중치/스케일러 파일(`models/**/*.pth`, `models/**/*.pkl`)이 Git에 누락되지 않도록 예외(`!`)로 지정했습니다.
 
-## v1.2 (generator.py에 LSTM 모델 학습 기능을 통합하고, 학습된 모델로 즉시 예측 가능한 running.py를 신규 추가)
+### **v3.0 (태양광 LSTM 지역별 학습 + 풍력 XGBoost 적용)**
+* **지역별 독립 모델 전환**: 태양광·풍력 모두 지역별 독립 모델로 전환하여 지역 고유의 특성을 반영했습니다.
+* **풍력 모델 머신러닝 교체**: 풍력 예측 모델을 기존 LSTM에서 XGBoost 모델로 교체하고, 기상 변수에 래그(Lag) 및 이동평균을 포함한 19개 피처를 조합하여 예측 정확도를 향상시켰습니다.
 
-# 🌞💨 기상 데이터 기반 태양광·풍력 발전량 예측 모델
+### **v2.0 (LSTM 모델 학습 통합 및 추론 전용 스크립트 추가)**
+* **학습 프레임워크 통합**: 데이터 전처리 전용이었던 `generator.py`에 LSTM 모델 학습 기능을 완전히 통합했습니다.
+* **예측 전용 running.py 신규 추가**: 학습된 가중치와 스케일러 파일만 불러와 특정 지역의 발전량을 즉시 예측할 수 있는 경량 추론 파일(`running.py`)을 추가했습니다.
 
-기상 데이터를 활용하여 태양광 및 풍력 발전량을 예측하는 LSTM 딥러닝 모델입니다.
+### **v1.0 (데이터 전처리 파이프라인 구현)**
+* **데이터 파이프라인 분리**: 태양광과 풍력 데이터의 특성을 반영해 전처리 및 통합 데이터셋 생성 로직을 독립적으로 설계했습니다.
+* **복수 관측소 기반 듀얼 매핑**: 지역별 발전량에 매핑되는 복수 기상 관측소 데이터의 가중 평균을 적용하여 국지적 기상 이상 노이즈를 제어했습니다.
+* **PyTorch 프레임워크 전환**: 객체지향형 LSTM 아키텍처 및 미니배치 학습(`DataLoader`)을 도입했습니다.
 
 ---
 
 ## 📁 프로젝트 구조
 
 ```
-├── generator.py              # 데이터 전처리 및 모델 학습
-├── running.py                # 학습된 모델로 발전량 예측
-├── dataset/                  # 데이터 폴더 (git 미포함)
-│   ├── *.csv                 # 발전량·기상·미세먼지 데이터
-│   ├── best_model.pth        # 태양광 최적 모델 가중치
-│   ├── best_model_wind.pth   # 풍력 최적 모델 가중치
-│   ├── scalers_X_solar.pkl   # 태양광 입력 스케일러
-│   ├── scalers_y_solar.pkl   # 태양광 출력 스케일러
-│   ├── scalers_X_wind.pkl    # 풍력 입력 스케일러
-│   └── scalers_y_wind.pkl    # 풍력 출력 스케일러
-└── README.md
+├── src/                      # 애플리케이션 소스 코드
+│   ├── main.py               # 메인 Streamlit 대시보드 진입점
+│   ├── engine/               # 핵심 통계 및 기상 시뮬레이션 엔진
+│   │   └── stochastic_weather.py
+│   ├── train/                # 모델 학습 및 검증 코드
+│   │   ├── train_national.py # 전국 및 광역 모델 학습 (구 generator.py)
+│   │   ├── train_gps.py      # 단지별 미세 풍력 모델 학습
+│   │   ├── train_jeju.py     # 제주도 풍력 특화 모델 학습
+│   │   └── evaluate.py       # 모델 성능 비교 및 평가
+│   └── ui/                   # Streamlit 탭 컴포넌트
+│       ├── anomaly_detection.py  # 1. 이상 탐지 탭
+│       ├── seq2seq_prediction.py # 2. Seq2Seq 예측 탭
+│       └── report_generator.py   # 3. 일일 보고서 생성 및 PDF 다운로드 탭
+├── tests/                    # 정합성 검증 및 추론 테스트 코드
+│   ├── test_pdf_generation.py # PDF 페이지 생성 단위 테스트
+│   └── test_inference.py     # 예측 추론 기능 작동 테스트
+├── data/                     # 데이터 세트 저장 폴더
+│   ├── raw/                  # 수집용 원본 데이터 (Git 제외)
+│   └── processed/            # 런타임 구동에 필요한 정제 데이터 (.csv)
+├── models/                   # 학습 완료된 예측 가중치 및 스케일러 파일
+│   ├── baseline/             # baseline 모델 가중치 (.pth)
+│   ├── national/             # 전국/광역 모델 가중치 및 스케일러 (.pth, .pkl)
+│   └── micro_gps/            # 단지별 미세 모델 가중치 및 스케일러 (.pth, .pkl)
+├── docs/                     # 문서 및 설명용 이미지
+│   └── figures/              # 리포트 예시 및 대시보드 그래프 이미지
+├── requirements.txt          # 패키지 의존성 명세 (Streamlit, fpdf2, Plotly 등 포함)
+├── .gitignore                # 제외 파일 설정 (배포 필수 파일 예외 적용)
+└── README.md                 # 본 프로젝트 문서
 ```
 
 ---
 
-## ⚙️ 설치
+## ⚙️ 설치 (Installation)
+
+교수님 컴퓨터 및 기타 배포 환경에서 구동하는 경우, 프로젝트 루트 경로에서 아래 명령어로 의존성을 일괄 설치합니다.
 
 ```bash
-pip install torch pandas numpy scikit-learn matplotlib joblib
+pip install -r requirements.txt
 ```
 
 ---
 
-## 🚀 사용 방법
+## 🚀 사용 방법 (Usage)
 
-### 1. 학습 (`generator.py`)
-
-`dataset/` 폴더에 CSV 파일을 배치한 후 실행
-
-```bash
-python generator.py
-```
-
-**출력 파일**
-- `best_model.pth` — 태양광 최적 모델
-- `best_model_wind.pth` — 풍력 최적 모델
-- `scalers_X_solar.pkl`, `scalers_y_solar.pkl` — 태양광 스케일러
-- `scalers_X_wind.pkl`, `scalers_y_wind.pkl` — 풍력 스케일러
-- `solar_integrated_dataset.csv` — 태양광 통합 데이터셋
-- `wind_integrated_dataset.csv` — 풍력 통합 데이터셋
-- `lstm_result_solar_all.png` — 태양광 전체 지역 결과 그래프
-- `lstm_result_wind_all.png` — 풍력 전체 지역 결과 그래프
-
-### 2. 예측 (`running.py`)
-
-학습 완료 후 실행
+### 1. 모니터링 웹 대시보드 실행
+모든 예측, 이상 탐지 및 PDF 보고서 출력을 지원하는 통합 웹 UI를 즉시 구동합니다.
 
 ```bash
-python running.py
+streamlit run src/main.py
 ```
 
-예측 지역은 `running.py` 하단에서 변경 가능
+### 2. 모델 재학습 (Training)
+전국/광역 모델을 재학습하고 스케일러 및 신규 모델 가중치를 생성합니다.
 
-```python
-target_region_solar = '제주도'   # 태양광 예측 지역
-target_region_wind  = '전라북도' # 풍력 예측 지역
+```bash
+python src/train/train_national.py
+```
+
+* **출력 파일**: `models/national/` 내에 지역별 `best_model_*.pth`, `best_model_wind_jeju_xgb.pkl`, 스케일러 `scalers_*.pkl` 및 통합 학습 데이터가 업데이트됩니다.
+
+### 3. 단위 기능 테스트 실행 (Test Verification)
+배포 시 추론 및 PDF 출력 엔진이 잘 동작하는지 정적으로 사전 확인합니다.
+
+```bash
+# PDF 생성 및 페이지 수 정상 분기 검증 테스트
+python tests/test_pdf_generation.py
+
+# 모델 로드 및 기상 변수 기반 추론 구동 검증 테스트
+python tests/test_inference.py
 ```
 
 ---
 
 ## 🧠 모델 구조
 
-| 항목 | 내용 |
-|---|---|
-| 모델 | LSTM (2층) |
-| 옵티마이저 | Adam |
-| 손실함수 | MSE |
-| 학습률 스케줄러 | ReduceLROnPlateau |
-| Early Stopping | patience=20 |
-| 입력 시퀀스 | 24시간 |
-| 출력 | 다음 1시간 발전량 (MWh) |
+| 항목 | 태양광 모델 (Solar) | 풍력 모델 (Wind) |
+|---|---|---|
+| **기반 아키텍처** | LSTM (2-Layered) | XGBoostRegressor |
+| **최적화 옵티마이저** | Adam | - |
+| **손실 함수 (Loss)** | MSE | - |
+| **학습률 스케줄러** | ReduceLROnPlateau | - |
+| **Early Stopping** | patience=20 | Early Stopping Rounds=10 |
+| **입력 시퀀스 길이** | 과거 24시간 연속 기상 데이터 | 현재 시각 기상 + 과거 래그(Lag) 정보 |
+| **출력 타겟** | 향후 1시간 발전량 (MWh) | 향후 1시간 발전량 (MWh) |
 
 ---
 
 ## 📊 입력 Feature
 
-**태양광 (7개)**
-```
-기온(°C), 풍속(m/s), 습도(%), 미세먼지농도, 시간, 월, 일사(MJ/m2)
-```
-
-**풍력 (9개)**
-```
-기온(°C), 풍속(m/s), 풍속_세제곱, 풍향(16방위), 습도(%),
-현지기압(hPa), 전운량(10분위), 시간, 월
-```
+* **태양광 (9개)**
+  ```
+  기온(°C), 풍속(m/s), 습도(%), 미세먼지농도, 시간_sin, 시간_cos, 월_sin, 월_cos, 일사(MJ/m2)
+  ```
+* **풍력 (11개 / XGBoost 내 래그 조합 포함 총 19개)**
+  ```
+  기온(°C), 풍속(m/s), 풍속_세제곱, 풍향(16방위), 습도(%), 현지기압(hPa), 전운량(10분위), 시간_sin, 시간_cos, 월_sin, 월_cos
+  ```
 
 ---
 
-## 📈 업데이트 내역
+## 📈 업데이트 내역 상세 (v2.0 vs v4.0 변동 요약)
 
-> 데이터 전처리 전용이었던 `generator.py`에 LSTM 모델 학습 기능을 통합하고, 학습된 모델로 즉시 예측 가능한 `running.py`를 신규 추가
+### **main.py (구 app.py / running.py)**
+* **이전**: 단순 콘솔 출력 형태의 추론 파일 `running.py`로 기능 제한.
+* **현재**: 다각화된 시각화 차트(Plotly 인터렉티브 차트) 및 파일철 스타일 웹 UI 탭으로 개편하여 예측부터 다운로드까지 Streamlit 대시보드 하나로 완결.
 
-### generator.py
-
-| 항목 | 이전 | 현재 |
-|---|---|---|
-| 역할 | 데이터 전처리만 수행 | 전처리 + LSTM 모델 학습 통합 |
-| 스케일링 | 전체 데이터에 fit | train 70%에만 fit (데이터 누수 방지) |
-| 시퀀스 생성 | 전체 합친 뒤 생성 | 지역별 생성 후 합치기 (경계 오염 제거) |
-| 데이터 분리 | train/test 2분할 | train/val/test 3분할 |
-| 스케일러 저장 | 저장 없음 | pickle로 저장 |
-| 일사량 처리 | 선형 보간 (야간 오류) | `fillna(0)` (야간 일사량 0 처리) |
-| 풍력 feature | 태양광과 동일 | 풍향·기압·전운량·풍속세제곱 추가 |
-| 학습률 스케줄러 | CosineAnnealingLR | ReduceLROnPlateau |
-| 시간 변환 | 거래시간 그대로 사용 | 거래시간 -1 보정 |
-| 경로 설정 | 윈도우 전용 (`\\`) | `os.path.join` (클라우드 호환) |
-| 시각화 | 전체 처음 300개 | 지역별 개별 시각화 |
-
-### running.py (신규 추가)
-
-학습된 모델로 특정 지역의 발전량을 즉시 예측하는 추론 전용 파일
-
-| 항목 | 내용 |
-|---|---|
-| 역할 | 저장된 모델·스케일러 로드 후 예측 실행 |
-| 스케일러 | pickle 로드 후 `transform`만 수행 (재학습 없음) |
-| 입력 | 지역별 최근 24시간 기상 데이터 |
-| 출력 | 태양광·풍력 발전량 예측값 (MWh) 및 합계 |
-| 경로 | `os.path.join` 사용 (클라우드 호환) |
+### **train_national.py (구 generator.py)**
+* **이전**: 학습 시 모든 데이터를 단일 LSTM 모델로 묶어 통합 학습하여 지역별 편차 반영 불가.
+* **현재**: 지역별 독립 LSTM(태양광) 및 XGBoost(풍력) 파이프라인으로 완전 전환하고, 데이터 누수 방지를 위한 엄밀한 Train/Val/Test 분할 적용.
 
 ---
+
+## 📊 모델 성능 지표
+
+**태양광 LSTM (지자체별 주요 Improved 성능)**
+* **전국 평균**: R² 0.9146 | MAE 19.95 MWh | RMSE 61.66 MWh | MAPE 25.15%
+
+**풍력 모델 (지자체별 Improved 성능)**
+* **일반 지역 (XGBoost Regressor 적용)**:
+  * **강원도**: R² 0.7555 | MAE 36.90 MWh | RMSE 48.28 MWh
+  * **경상북도**: R² 0.7151 | MAE 35.23 MWh | RMSE 47.36 MWh
+  * **전라북도**: R² 0.6329 | MAE 8.03 MWh | RMSE 10.75 MWh
+  * **육지전체**: R² 0.7917 | MAE 101.36 MWh | RMSE 130.00 MWh
+* **제주도 지역 (전용 LSTM 모델 적용)**:
+  * 제주도의 독특한 도서 기후 및 계통적 특성으로 인해 풍력 모델은 XGBoost 대신 **제주도 전용 LSTM 시계열 모델**이 독립적으로 구축되었습니다.
+  * **제주도 풍력 LSTM**: R² 0.5101 | MAE 22.56 MWh | RMSE 33.82 MWh
+
+---
+
 
 ## 🗂️ 데이터 출처
 
-- 태양광·풍력 발전량: 한국전력거래소 공공데이터포털
-- 기상 데이터: 기상자료개방포털
-- 미세먼지: 환경부 에어코리아
-- 풍력기 위치정보: 한국에너지공단
+* 태양광·풍력 발전량: 한국전력거래소 공공데이터포털
+* 기상 데이터: 기상자료개방포털
+* 미세먼지 데이터: 환경부 에어코리아
+* 풍력기 위치 메타정보: 한국에너지공단
