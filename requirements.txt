@@ -3,3 +3,8 @@ matplotlib
 numpy
 torch
 scikit-learn
+streamlit
+joblib
+plotly
+fpdf2
+xgboost
