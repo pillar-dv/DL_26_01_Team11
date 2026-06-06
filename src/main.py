@@ -209,22 +209,19 @@ with tab_wind:
         target_month_w, target_day_w = future_date_w.month, future_date_w.day
         hist_df_w = wind_df[(wind_df['지역'] == sim_region_wind) & (wind_df['일시'].dt.month == target_month_w) & (wind_df['일시'].dt.day == target_day_w)].copy()
         
+        agg_features_w = [col for col in features_wind if col not in ['시간', '시간_sin', '시간_cos', '월_sin', '월_cos']]
         if not hist_df_w.empty:
-            agg_features_w = [col for col in features_wind if col not in ['시간', '시간_sin', '시간_cos', '월_sin', '월_cos']]
             base_profile_w = hist_df_w.groupby('시간')[agg_features_w].mean().reset_index()
-            default_wind = float(base_profile_w['풍속(m/s)'].mean())
-            default_temp_w = float(base_profile_w['기온(°C)'].mean())
         else:
-            base_profile_w = wind_df[wind_df['지역'] == sim_region_wind].tail(24).copy()
-            default_wind, default_temp_w = 5.0, 15.0
+            base_profile_w = wind_df[wind_df['지역'] == sim_region_wind].groupby('시간')[agg_features_w].mean().reset_index()
+        default_wind = float(base_profile_w['풍속(m/s)'].mean())
+        default_temp_w = float(base_profile_w['기온(°C)'].mean())
 
         # AI 확률론적 기상 자동생성 체크박스
         use_stochastic_wind = st.checkbox("🎲 AI 확률론적 기상 자동생성", value=False, key="stochastic_wind")
         
-        # GPS 초국소 단지별 합산 모델 적용 체크박스 (제주도일 때만 노출)
-        use_gps_model = False
-        if sim_region_wind == '제주도':
-            use_gps_model = st.checkbox("📡 GPS 초국소 단지별 합산 모델 적용 (v2)", value=False, key="gps_model_wind")
+        # GPS 초국소 단지별 합산 모델 적용 체크박스 (전 지역 노출로 확대)
+        use_gps_model = st.checkbox("📡 GPS 초국소 단지별 합산 모델 적용 (v2)", value=False, key="gps_model_wind")
 
         sim_wind_speed = st.slider("💨 예상 평균 풍속 (m/s)", 0.0, 30.0, float(round(default_wind, 1)), 0.1, key=f"w_spd_{sim_region_wind}_{future_date_w}", disabled=use_stochastic_wind)
         sim_temp_w = st.slider("🌡️ 예상 평균 기온 (°C)", -15.0, 40.0, float(round(default_temp_w, 1)), 0.5, key=f"w_tmp_{sim_region_wind}_{future_date_w}", disabled=use_stochastic_wind)
@@ -251,6 +248,9 @@ with tab_wind:
                     else: sim_df_w['풍속(m/s)'] = sim_wind_speed
                     sim_df_w['기온(°C)'] = sim_df_w['기온(°C)'] + (sim_temp_w - default_temp_w)
                     
+                # 강제 정렬 및 인덱스 초기화로 시간대 매핑 붕괴 방지
+                sim_df_w = sim_df_w.sort_values('시간').reset_index(drop=True)
+                    
                 # 롤링 예측을 위한 48시간 기상 확장 생성
                 sim_df_extended = pd.concat([sim_df_w, sim_df_w], ignore_index=True)
                 sim_df_extended['시간'] = np.arange(48) % 24
@@ -264,7 +264,7 @@ with tab_wind:
                 
                 hourly_preds_w = []
                 
-                if sim_region_wind == '제주도' and use_gps_model:
+                if use_gps_model:
                     preds_gps = {}
                     pred_sum_w = 0.0
                     
@@ -325,7 +325,11 @@ with tab_wind:
                 
                 st.success(f"🗓️ {future_date_w.strftime('%Y년 %m월 %d일')} {sim_region_wind} 풍력 예측 완료!")
                 
-                m_col1, m_col2 = st.columns(2)
+                # 램핑률 계산
+                ramping_rates_w = [abs(hourly_preds_w[i] - hourly_preds_w[i-1]) for i in range(1, len(hourly_preds_w))]
+                max_ramping_w = max(ramping_rates_w) if ramping_rates_w else 0.0
+                
+                m_col1, m_col2, m_col3 = st.columns(3)
                 m_col1.metric(label=f"🌪️ 예상 일일 총 풍력 발전량", value=f"{sim_result_w:.2f} MWh")
                 
                 max_wind = float(sim_df_w['풍속(m/s)'].max()) if '풍속(m/s)' in sim_df_w.columns else 0.0
@@ -336,11 +340,19 @@ with tab_wind:
                 else:
                     m_col2.success(f"✅ 안정: 특이 {sim_region_wind} 풍력 계통 불안정 징후 없음")
                 
+                # 3단계 램핑 알림 연동
+                if max_ramping_w < 30.0:
+                    m_col3.success(f"✅ 램핑 안정 ({max_ramping_w:.2f} MWh/hr)\n계통 예비력 안정 범위")
+                elif 30.0 <= max_ramping_w <= 80.0:
+                    m_col3.warning(f"⚠️ 램핑 주의 ({max_ramping_w:.2f} MWh/hr)\n가스터빈/양수 발전기 예비 시동 권고")
+                else: # > 80.0
+                    m_col3.error(f"🚨 램핑 위험 ({max_ramping_w:.2f} MWh/hr)\n양수발전기 즉시 기동 및 출력제어 준비 필수")
+                
                 st.divider()
                 
                 v_col1, v_col2 = st.columns(2)
                 with v_col1:
-                    if sim_region_wind == '제주도' and use_gps_model:
+                    if use_gps_model:
                         st.markdown("##### 📡 GPS 초국소 단지별 매핑 위치")
                         map_data = []
                         for stage, coords in GPS_FARM_INFO.items():
@@ -358,7 +370,7 @@ with tab_wind:
                         map_df = pd.DataFrame(map_data)
                         if not map_df.empty: st.map(map_df, zoom=6)
                 with v_col2:
-                    if sim_region_wind == '제주도' and use_gps_model:
+                    if use_gps_model:
                         st.markdown("##### 📊 단지별 발전 기여도 비교")
                         import plotly.graph_objects as go
                         stages = list(preds_gps.keys())
@@ -458,14 +470,13 @@ with tab_solar:
         target_month_s, target_day_s = future_date_s.month, future_date_s.day
         hist_df_s = solar_df[(solar_df['지역'] == sim_region_solar) & (solar_df['일시'].dt.month == target_month_s) & (solar_df['일시'].dt.day == target_day_s)].copy()
         
+        agg_features_s = [col for col in features_solar if col not in ['시간', '시간_sin', '시간_cos', '월_sin', '월_cos']]
         if not hist_df_s.empty:
-            agg_features_s = [col for col in features_solar if col not in ['시간', '시간_sin', '시간_cos', '월_sin', '월_cos']]
             base_profile_s = hist_df_s.groupby('시간')[agg_features_s].mean().reset_index()
-            default_insol = float(base_profile_s['일사(MJ/m2)'].mean())
-            default_temp_s = float(base_profile_s['기온(°C)'].mean())
         else:
-            base_profile_s = solar_df[solar_df['지역'] == sim_region_solar].tail(24).copy()
-            default_insol, default_temp_s = 1.0, 15.0
+            base_profile_s = solar_df[solar_df['지역'] == sim_region_solar].groupby('시간')[agg_features_s].mean().reset_index()
+        default_insol = float(base_profile_s['일사(MJ/m2)'].mean())
+        default_temp_s = float(base_profile_s['기온(°C)'].mean())
 
         # AI 확률론적 기상 자동생성 체크박스
         use_stochastic_solar = st.checkbox("🎲 AI 확률론적 기상 자동생성", value=False, key="stochastic_solar")
@@ -495,6 +506,20 @@ with tab_solar:
                     else: sim_df_s['일사(MJ/m2)'] = sim_insol
                     sim_df_s['기온(°C)'] = sim_df_s['기온(°C)'] + (sim_temp_s - default_temp_s)
                 
+                # 강제 정렬 및 인덱스 초기화로 시간대 매핑 붕괴 방지
+                sim_df_s = sim_df_s.sort_values('시간').reset_index(drop=True)
+                
+                # 태양광 기상 데이터 가드 (기온과 일사량 스왑 오류 방어)
+                if '기온(°C)' in sim_df_s.columns and '일사(MJ/m2)' in sim_df_s.columns:
+                    day_df = sim_df_s[(sim_df_s['시간'] >= 10) & (sim_df_s['시간'] <= 16)]
+                    if not day_df.empty:
+                        avg_temp_day = day_df['기온(°C)'].mean()
+                        avg_insol_day = day_df['일사(MJ/m2)'].mean()
+                        if avg_insol_day > 10.0:
+                            temp_vals = sim_df_s['기온(°C)'].copy()
+                            sim_df_s['기온(°C)'] = sim_df_s['일사(MJ/m2)'].copy()
+                            sim_df_s['일사(MJ/m2)'] = temp_vals
+                            
                 # 롤링 예측을 위한 48시간 기상 확장 생성
                 sim_df_extended = pd.concat([sim_df_s, sim_df_s], ignore_index=True)
                 sim_df_extended['시간'] = np.arange(48) % 24
@@ -535,17 +560,39 @@ with tab_solar:
                 
                 st.success(f"🗓️ {future_date_s.strftime('%Y년 %m월 %d일')} {sim_region_solar} 태양광 예측 완료!")
                 
-                m_col1, m_col2 = st.columns(2)
+                # 램핑률 계산
+                ramping_rates_s = [abs(hourly_preds_s[i] - hourly_preds_s[i-1]) for i in range(1, len(hourly_preds_s))]
+                max_ramping_s = max(ramping_rates_s) if ramping_rates_s else 0.0
+                
+                m_col1, m_col2, m_col3 = st.columns(3)
                 m_col1.metric(label=f"☀️ 예상 일일 총 태양광 발전량", value=f"{sim_result_s:.2f} MWh")
+                is_noon_dip_s = False
+                if not sim_df_s.empty:
+                    insol_10_s = float(sim_df_s[sim_df_s['시간'] == 10]['일사(MJ/m2)'].values[0]) if not sim_df_s[sim_df_s['시간'] == 10].empty else 0.0
+                    insol_12_s = float(sim_df_s[sim_df_s['시간'] == 12]['일사(MJ/m2)'].values[0]) if not sim_df_s[sim_df_s['시간'] == 12].empty else 0.0
+                    insol_14_s = float(sim_df_s[sim_df_s['시간'] == 14]['일사(MJ/m2)'].values[0]) if not sim_df_s[sim_df_s['시간'] == 14].empty else 0.0
+                    if insol_12_s < insol_10_s * 0.9 or insol_12_s < insol_14_s * 0.9:
+                        is_noon_dip_s = True
                 
                 peak_energy_s = max(hourly_preds_s) if hourly_preds_s else 0.0
                 avg_insol_val = float(sim_df_s['일사(MJ/m2)'].mean()) if '일사(MJ/m2)' in sim_df_s.columns else 0.0
                 if peak_energy_s >= 200.0:
-                    m_col2.warning("⚠️ 주의: 정오 시간대 태양광 쏠림 및 계통 과전압 리스크")
+                    if is_noon_dip_s:
+                        m_col2.warning("⚠️ 주의: 정오 시간대 구름 유입 및 일시적 광량 급감(Dip) 리스크")
+                    else:
+                        m_col2.warning("⚠️ 주의: 정오 시간대 태양광 쏠림 및 계통 과전압 리스크")
                 elif avg_insol_val < 0.4:
                     m_col2.warning("☁️ 주의: 광량 부족에 따른 태양광 기저 전력 급감 우려")
                 else:
                     m_col2.success(f"✅ 안정: 특이 {sim_region_solar} 태양광 계통 불안정 징후 없음")
+                
+                # 3단계 램핑 알림 연동
+                if max_ramping_s < 30.0:
+                    m_col3.success(f"✅ 램핑 안정 ({max_ramping_s:.2f} MWh/hr)\n계통 예비력 안정 범위")
+                elif 30.0 <= max_ramping_s <= 80.0:
+                    m_col3.warning(f"⚠️ 램핑 주의 ({max_ramping_s:.2f} MWh/hr)\nESS 방전 및 가스터빈 백업 대기 권고")
+                else: # > 80.0
+                    m_col3.error(f"🚨 램핑 위험 ({max_ramping_s:.2f} MWh/hr)\nESS 가동/양수발전기 즉시 기동 필수")
                 
                 st.divider()
                 
