@@ -281,8 +281,33 @@ def render_report_tab(wind_df, solar_df):
                         risk_desc = '정오 시간대 태양광 쏠림 및 계통 과전압 리스크'
                         guide_a = '일사량 과다 및 맑은 기후로 인해 정오(12시~14시) 전력 공급량이 과잉 적재되어 배전 전압이 임계치를 초과할 위협이 존재함.'
                         guide_b = '계통 안정을 위한 ESS 흡수 충전 가동 및 필요시 예비 송전선 차단 등의 출력제어(Curtailment) 준비 필요함.'
-                plt.rcParams['font.family'] = 'Malgun Gothic'
+                import matplotlib.font_manager as fm
+                local_font = os.path.join(PROJECT_ROOT, 'src', 'fonts', 'malgun.ttf')
+                sys_font = r'C:\Windows\Fonts\malgun.ttf'
+                font_name = None
+                
+                # 프로젝트 내장 폰트 파일 탐색 및 등록
+                if os.path.exists(local_font):
+                    try:
+                        font_name = fm.FontProperties(fname=local_font).get_name()
+                        fm.fontManager.addfont(local_font)
+                    except Exception:
+                        pass
+                # Windows 시스템 폰트 폴백
+                if font_name is None and os.path.exists(sys_font):
+                    try:
+                        font_name = fm.FontProperties(fname=sys_font).get_name()
+                        fm.fontManager.addfont(sys_font)
+                    except Exception:
+                        pass
+                
+                if font_name:
+                    plt.rcParams['font.family'] = font_name
+                else:
+                    plt.rcParams['font.family'] = 'sans-serif'
+                
                 plt.rcParams['axes.unicode_minus'] = False
+
                 fig, ax = plt.subplots(figsize=(6.5, 3.2))
                 ax.plot(np.arange(24), hourly_preds, color='#1f77b4', linewidth=2.5, marker='o', markersize=4, label='예측 발전량')
                 ax.fill_between(np.arange(24), hourly_preds, color='#1f77b4', alpha=0.15)

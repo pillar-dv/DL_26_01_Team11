@@ -14,3 +14,10 @@ generator_modeling.ipynb
 generator.ipynb
 backup_v1/
 store/
+
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
