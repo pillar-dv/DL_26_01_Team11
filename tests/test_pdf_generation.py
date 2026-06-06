@@ -155,7 +155,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.multi_cell(0, 5, bg_text)
     pdf.ln(4)
     
-    title_ii = '\u2161. AI \uc608\uce21 \ubaa8\ub378 \uc544\ud0a4\ud14d\ucc28 \ubc0f \ud558\uc774\ud37c\ud30c\ub77c\uba54\ud130 \uba85\uc138'
+    title_ii = '\u2161. AI \uc608\uce21 \ubaa8\ub378 \uc544\ud0a4\ud14d\ucc98 \ubc0f \ud558\uc774\ud37c\ud30c\ub77c\ubbf8\ud130 \uba85\uc138'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_ii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -163,7 +163,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.multi_cell(0, 5, arch_text)
     pdf.ln(4)
     
-    title_iii = '\u2162. \uc608\ubcf4 \uc77c\uc790 \ubc0f \ud0c0\uac9f \uc0ac\uc596 \uba85\uc138'
+    title_iii = '\u2162. \uc608\ubcf4 \uc77c\uc790 \ubc0f \ud0c0\uac9f \uc0ac\uc591 \uba85\uc138'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_iii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -205,7 +205,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         pdf.cell(col_w[3], 6, f'{hourly_preds[h]:.2f}', border=1, ln=1, align='C')
     pdf.ln(5)
     
-    title_vi = '\u2165. \uc2dc\uac04\ub300\ubcc4 \ubc1c\uc804 \uc608\uc121 \uc2dc\uacc4\uc5f4 \ubd84\uc11d \ucc28\ud2b8'
+    title_vi = '\u2165. \uc2dc\uac04\ub300\ubcc4 \ubc1c\uc804 \uc608\uce21 \uc2dc\uacc4\uc5f4 \ubd84\uc11d \ucc28\ud2b8'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_vi, border=0, ln=1)
     pdf.ln(1)
@@ -222,7 +222,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
 
     # ==================== 3페이지 작성 (Ⅶ, Ⅷ, Ⅸ) ====================
     pdf.add_page()
-    title_vii = '\u2166. \uc2dc\uacc4\uc5f4 \ud750\ub984 \uc138\ubd80 \ud574\uc11d \ubc0f \uacc4\ud1b5 \ubcc0\ub3d9\uc131(Ramping Rate) \ubd84\uc11d \uc62c\uacac'
+    title_vii = '\u2166. \uc2dc\uacc4\uc5f4 \ud750\ub984 \uc138\ubd80 \ud574\uc11d \ubc0f \uacc4\ud1b5 \ubcc0\ub3d9\uc131(Ramping Rate) \ubd84\uc11d \uc758\uacac'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_vii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -232,7 +232,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.multi_cell(0, 5.2, '  2. 계통 영향성 종합 의견 :\n    가. 순간 램핑률이 한계치(30MWh/hr) 미만으로 감지되어 계통 순간 동적 예비력은 안정 범위임.\n    나. 단, 급경사 램핑에 대응하기 위해 기동이 빠른 양수발전기 연계 제어 대기가 필수적임.')
     pdf.ln(5)
 
-    title_viii = '\u2167. \uc804\ub825 \uacc4\ud1b5 \uc548\uc815\uc131 \uac80\ud1a0 \ubc0f \uc870\uce58 \uac00\uc774\ub4dc\ub7bc\uc778'
+    title_viii = '\u2167. \uc804\ub825 \uacc4\ud1b5 \uc548\uc815\uc131 \uac80\ud1a0 \ubc0f \uc870\uce58 \uac00\uc774\ub4dc\ub77c\uc778'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_viii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -241,7 +241,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.multi_cell(0, 5.5, f'    가. {guide_a}\n    나. {guide_b}')
     pdf.ln(5)
 
-    title_ix = '\u2168. \ud5a5\ud6c4 2\ub2e8\uacc4 \ucd94\uc9c4 \uacc4\ud68d \ubc0f \ucd08\uad6d\uc18c VPP \ucd5c\uc801\ud654 \ub85c\ub4dc\uba65'
+    title_ix = '\u2168. \ud5a5\ud6c4 2\ub2e8\uacc4 \ucd94\uc9c4 \uacc4\ud68d \ubc0f \ucd08\uad6d\uc18c VPP \ucd5c\uc801\ud654 \ub85c\ub4dc\ub9f5'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_ix, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -253,8 +253,6 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.multi_cell(0, 4.5, '※ 본 보고서는 전력 계통 사전 통제용 분석 결과로, 실제 전력거래소 실측 실적치와는 차이가 발생할 수 있으며 센서 결함 및 이변 환경에 따라 상시 오차가 감지될 수 있음을 고지함.')
     
     pdf.ln(2)
-    pdf.set_font('Malgun', '', 9)
-    pdf.cell(0, 5, '(끝)', border=0, ln=1, align='R')
         
     pdf_bytes = bytes(pdf.output())
     
