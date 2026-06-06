@@ -7,6 +7,7 @@ import torch.nn as nn
 import joblib
 import datetime
 import matplotlib.pyplot as plt
+import unicodedata
 from fpdf import FPDF
 from engine.stochastic_weather import generate_stochastic_weather
 
@@ -100,6 +101,16 @@ class PublicSectorPDF(FPDF):
             family = 'Helvetica'
         super().set_font(family, style, size)
 
+    def cell(self, w, h=None, txt="", **kwargs):
+        if isinstance(txt, str):
+            txt = unicodedata.normalize('NFC', txt)
+        return super().cell(w, h, txt, **kwargs)
+
+    def multi_cell(self, w, h=None, txt="", **kwargs):
+        if isinstance(txt, str):
+            txt = unicodedata.normalize('NFC', txt)
+        return super().multi_cell(w, h, txt, **kwargs)
+
     def header(self):
         if self.page_no() > 1:
             self.set_font('Malgun', '', 8)
@@ -113,6 +124,7 @@ class PublicSectorPDF(FPDF):
         self.set_font('Malgun', '', 9)
         self.set_text_color(100, 100, 100)
         self.cell(0, 10, f'- {self.page_no()} -', border=0, ln=0, align='C')
+
 
 
 def render_report_tab(wind_df, solar_df):
@@ -308,15 +320,31 @@ def render_report_tab(wind_df, solar_df):
                 
                 plt.rcParams['axes.unicode_minus'] = False
 
+                # 폰트 프로퍼티 명시적 생성 (개별 요소 렌더링에 직접 적용하여 깨짐을 예방)
+                font_prop = None
+                if font_name:
+                    if os.path.exists(local_font):
+                        font_prop = fm.FontProperties(fname=local_font)
+                    elif os.path.exists(sys_font):
+                        font_prop = fm.FontProperties(fname=sys_font)
+
                 fig, ax = plt.subplots(figsize=(6.5, 3.2))
                 ax.plot(np.arange(24), hourly_preds, color='#1f77b4', linewidth=2.5, marker='o', markersize=4, label='예측 발전량')
                 ax.fill_between(np.arange(24), hourly_preds, color='#1f77b4', alpha=0.15)
-                ax.set_title(f'{formatted_target_date} {sel_region} {target_energy} 24시간 예측 흐름', fontsize=10, fontweight='bold', pad=10)
-                ax.set_xlabel('시간 (시)', fontsize=8)
-                ax.set_ylabel('발전량 (MWh)', fontsize=8)
+                
+                if font_prop:
+                    ax.set_title(f'{formatted_target_date} {sel_region} {target_energy} 24시간 예측 흐름', fontsize=10, fontweight='bold', pad=10, fontproperties=font_prop)
+                    ax.set_xlabel('시간 (시)', fontsize=8, fontproperties=font_prop)
+                    ax.set_ylabel('발전량 (MWh)', fontsize=8, fontproperties=font_prop)
+                    ax.legend(fontsize=8, loc='upper left', prop=font_prop)
+                else:
+                    ax.set_title(f'{formatted_target_date} {sel_region} {target_energy} 24시간 예측 흐름', fontsize=10, fontweight='bold', pad=10)
+                    ax.set_xlabel('시간 (시)', fontsize=8)
+                    ax.set_ylabel('발전량 (MWh)', fontsize=8)
+                    ax.legend(fontsize=8, loc='upper left')
                 ax.set_xticks(np.arange(0, 24, 3))
                 ax.grid(True, linestyle='--', alpha=0.5)
-                ax.legend(fontsize=8, loc='upper left')
+
                 os.makedirs(DOCS_PATH, exist_ok=True)
                 temp_chart_path = os.path.join(DOCS_PATH, 'temp_report_chart.png')
                 fig.savefig(temp_chart_path, dpi=200, bbox_inches='tight')
