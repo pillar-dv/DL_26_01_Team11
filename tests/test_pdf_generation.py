@@ -97,7 +97,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         bg_need_1 = '지구 온난화 및 기후 변화로 인해 태양광 발전의 일사량 간헐성이 전력망 운영 한계치에 다다르고 있음.'
         bg_need_2 = '특히 기습적인 구름 유입 및 미세먼지로 인한 급격한 발전량 강하(Drop) 현상으로 송배전 전압 안정이 위협받음.'
         bg_need_3 = '이에 고정밀 AI LSTM 일사량 감응 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.'
-        bg_purpose_1 = f'예측 대상 일자({formatted_target_date})의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
+        bg_purpose_1 = f'선택된 타겟 일자({formatted_target_date})의 기상 시나리오에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
         bg_purpose_2 = '예상되는 주간 과전압 리스크를 최소화하고, ESS(에너지저장장치) 충·방전 스케줄링을 최적화하며 계통 전압을 안정 범위 이내로 통제하는 데 기여함을 목적으로 함.'
         
         arch_input_dim = '9차원 기상 피처 (기온, 풍속, 습도, 미세먼지농도, 일사량, 시간/월 주기 인자)'
@@ -105,12 +105,15 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         vi_opinion_a = '일출(06시)부터 일몰(20시)까지 일사량 패턴에 감응하여 매끄러운 단봉형(Bell-shape) 발전 곡선을 형성함.'
         vi_opinion_b = '정오 시간대(12~14시)에 출력이 고도로 밀집되므로 해당 시간대 배전 선로 과전압 유의 바람.'
         
-        if max_ramping >= 30.0:
-            vii_ramping_a = f'시간당 최대 램핑률이 관리 임계치(30MWh/hr)를 초과한 {max_ramping:.2f} MWh/hr로 관측되어 계통 불안정 리스크가 높음.'
-            vii_ramping_b = '급격한 기상 변화에 대응할 수 있도록 부하 조절용 ESS 방전 및 신속 시동 가스터빈 백업 가동 대기가 필수적임.'
-        else:
-            vii_ramping_a = f'시간당 최대 램핑률이 관리 임계치(30MWh/hr) 미만인 {max_ramping:.2f} MWh/hr로 관측되어 계통 동적 예비력은 안정 범위임.'
+        if max_ramping < 30.0:
+            vii_ramping_a = f'시간당 최대 램핑률이 안정 범위(30MWh/hr 미만)인 {max_ramping:.2f} MWh/hr로 관측되어 계통 동적 예비력은 안정 범위임.'
             vii_ramping_b = '일반적인 계통 연계 예비력 범위 내에서 관리 가능하므로 추가적인 비상 백업 가동은 불요함.'
+        elif 30.0 <= max_ramping <= 80.0:
+            vii_ramping_a = f'시간당 최대 램핑률이 관리 임계치를 초과(30~80MWh/hr)한 {max_ramping:.2f} MWh/hr로 관측되어 계통 불안정 리스크가 증가함.'
+            vii_ramping_b = '급격한 기상 변화에 대응할 수 있도록 부하 조절용 ESS 방전 및 신속 시동 가스터빈 백업 가동 대기가 권고됨.'
+        else: # max_ramping > 80.0
+            vii_ramping_a = f'시간당 최대 램핑률이 위험 임계치를 초과(80MWh/hr 초과)한 {max_ramping:.2f} MWh/hr로 관측되어 전력망 붕괴 리스크가 우려됨.'
+            vii_ramping_b = '초급경사 램핑 대응을 위해 부하 조절용 ESS 가동과 함께 대용량 양수 발전기 즉각 기동 및 예비 발전원 비상 대기 상태 유지가 필수적임.'
         
         road_study_1 = '실제 발전 실측치와 AI 예측 오차를 분석하여 일사 감응 피드백 오차 보정 학습을 진행함.'
         road_vpp_2 = '스마트 인버터 원격 출력 제어 기술 및 분산 태양광 실시간 수집 연계 소프트웨어를 정비할 예정임.'
@@ -118,7 +121,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         bg_need_1 = '지구 온난화 및 기후 변화로 인해 풍력 발전의 거대 기압골 변동성이 전력망 운영 한계치에 다다르고 있음.'
         bg_need_2 = '특히 돌발적인 무풍(Calm) 현상 또는 태풍급 강풍에 따른 급격한 출력 차단(Cut-out)으로 계통 주파수 상실 위협이 증대됨.'
         bg_need_3 = '이에 고정밀 AI LSTM 풍속/기압 감응 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.'
-        bg_purpose_1 = f'예측 대상 일자({formatted_target_date})의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
+        bg_purpose_1 = f'선택된 타겟 일자({formatted_target_date})의 기상 시나리오에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
         bg_purpose_2 = '예상되는 출력제어(Curtailment) 리스크를 최소화하고, 기동이 빠른 백업 전원과의 실시간 출력 연계 가동을 대기시켜 계통 주파수를 안정 범위(60Hz +-0.2) 이내로 통제하는 데 기여함을 목적으로 함.'
         
         arch_input_dim = '11차원 기상 피처 (기온, 풍속, 풍속세제곱, 풍향, 습도, 현지기압, 전운량, 시간/월 주기 인자)'
@@ -126,18 +129,21 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         vi_opinion_a = '주야간 구분 없이 기압골 및 풍속 추이에 유기적으로 대응하여 불규칙하고 역동적인 예측 곡선을 형성함.'
         vi_opinion_b = '풍속 변화에 따른 돌발성 램핑(출력 급변) 및 컷인 임계값 경계 구간에서 제어 준비 바람.'
         
-        if max_ramping >= 30.0:
-            vii_ramping_a = f'바람세기 급변에 따른 시간당 최대 램핑률이 관리 임계치(30MWh/hr)를 초과한 {max_ramping:.2f} MWh/hr로 관측되어 계통 요동이 예상됨.'
-            vii_ramping_b = '풍력 출력 급감 시 즉각적인 전력망 보완을 위해 가동 속도가 빠른 가스터빈 및 양수 발전기의 긴급 예비 시동 대기가 시급함.'
-        else:
-            vii_ramping_a = f'바람세기 변동에 따른 시간당 최대 램핑률이 관리 임계치(30MWh/hr) 미만인 {max_ramping:.2f} MWh/hr로 관측되어 계통 순간 동적 예비력은 안정 범위임.'
+        if max_ramping < 30.0:
+            vii_ramping_a = f'바람세기 변동에 따른 시간당 최대 램핑률이 안정 범위(30MWh/hr 미만)인 {max_ramping:.2f} MWh/hr로 관측되어 계통 순간 동적 예비력은 안정 범위임.'
             vii_ramping_b = '일상적인 변동 감시 체계 하에서 통제 가능하므로 추가 백업 가동이나 인위적인 출력제어 준비는 불요함.'
+        elif 30.0 <= max_ramping <= 80.0:
+            vii_ramping_a = f'바람세기 변동에 따른 시간당 최대 램핑률이 관리 임계치를 초과(30~80MWh/hr)한 {max_ramping:.2f} MWh/hr로 관측되어 계통 요동이 예상됨.'
+            vii_ramping_b = '풍력 출력 급감 시 즉각적인 전력망 보완을 위해 가동 속도가 빠른 가스터빈 및 양수 발전기의 긴급 예비 시동 대기가 권고됨.'
+        else: # max_ramping > 80.0
+            vii_ramping_a = f'바람세기 급변에 따른 시간당 최대 램핑률이 위험 임계치를 초과(80MWh/hr 초과)한 {max_ramping:.2f} MWh/hr로 관측되어 계통 주파수 상실 리스크가 극도로 높음.'
+            vii_ramping_b = '초급경사 램핑 리스크 감지에 따라 전력망 붕괴 방지를 위해 대용량 양수발전기 즉각 기동 및 송전선로 물리적 차단/출력제어(Curtailment) 긴급 대기를 즉시 발령해야 함.'
         
         road_study_1 = '실제 발전 실측치와 AI 예측 오차를 분석하여 풍속-출력 비선형 곡선(Power Curve) 보정 학습을 진행함.'
         road_vpp_2 = '개별 터빈 요잉/피치 제어 연동 기술 및 대용량 풍력단지 통합 VPP 스케줄러를 고도화할 예정임.'
     
     if sel_region == '제주도':
-        road_study_2 = '제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.'
+        road_study_2 = f'{sel_region} 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.'
     else:
         road_study_2 = f'{sel_region} 관측소 기상 실측 데이터와의 오차를 피드백하여 피크 오차 보정 학습을 주간 단위로 실시함.'
 
@@ -309,7 +315,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.set_fill_color(70, 110, 140)
     pdf.set_text_color(255, 255, 255)
     pdf.set_font('Malgun', 'B', 8)
-    col_w = [45, 45, 45, 45]
+    col_w = [35, 35, 50, 60]
     pdf.cell(col_w[0], 5, '시간대', border=1, fill=True, align='C')
     pdf.cell(col_w[1], 5, '기온(°C)', border=1, fill=True, align='C')
     pdf.cell(col_w[2], 5, '일사량(MJ/m2)' if target_energy=='태양광 (Solar)' else '풍속(m/s)', border=1, fill=True, align='C')
