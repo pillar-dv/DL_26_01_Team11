@@ -167,7 +167,12 @@ def render_report_tab(wind_df, solar_df):
             use_gps_v2 = st.checkbox('📡 GPS 초국소 단지별 합산 모델 적용 (v2)', value=False, key='rep_gps')
         st.divider()
         st.markdown('##### ✍️ 기안 정보 기입')
-        doc_number = st.text_input('문서 번호', f"신재생계통-{target_date.strftime('%Y-%m%d')}호", key='rep_doc_num')
+        # 보고서 기준 일자가 바뀌면 문서 번호 기본값 자동 동기화
+        _auto_doc_num = f"신재생계통-{target_date.strftime('%Y-%m%d')}호"
+        if st.session_state.get('_last_rep_date') != str(target_date):
+            st.session_state['rep_doc_num'] = _auto_doc_num
+            st.session_state['_last_rep_date'] = str(target_date)
+        doc_number = st.text_input('문서 번호', value=_auto_doc_num, key='rep_doc_num')
         drafter_dept = st.text_input('기안 부서', '신재생에너지계통통제원', key='rep_dept')
         drafter_name = st.text_input('기안자 직위/성명', '주임연구원 심온', key='rep_name')
         st.markdown('##### 📄 문서 분량 및 내용 구성')
