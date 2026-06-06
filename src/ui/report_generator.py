@@ -240,9 +240,6 @@ def render_report_tab(wind_df, solar_df):
                                         pred_scaled = m_wind_gps(input_tensor).cpu().numpy()
                                     pred_actual = sy_wind_gps[stg].inverse_transform(pred_scaled)
                                     pred_val = float(np.maximum(pred_actual[0][0], 0))
-                                    wind_spd = sim_weather_df.iloc[t]['풍속(m/s)']
-                                    if wind_spd < 2.0:
-                                        pred_val = 0.0
                                     stage_preds[stg].append(pred_val)
                             else:
                                 stage_preds[stg] = [0.0] * 24
@@ -261,9 +258,6 @@ def render_report_tab(wind_df, solar_df):
                                     pred_scaled = m_wind(input_tensor).cpu().numpy()
                                 pred_actual = sy_wind[sel_region].inverse_transform(pred_scaled)
                                 pred_val = float(np.maximum(pred_actual[0][0], 0))
-                                wind_spd = sim_weather_df.iloc[t]['풍속(m/s)']
-                                if wind_spd < 2.0:
-                                    pred_val = 0.0
                                 hourly_preds.append(pred_val)
                 if not hourly_preds:
                     st.error('⚠️ AI 예측 데이터 산출 실패.')
@@ -279,27 +273,85 @@ def render_report_tab(wind_df, solar_df):
                 weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금', 5: '토', 6: '일'}
                 formatted_target_date = f'{target_date.strftime("%Y. %m. %d.")} ({weekday_map[target_date.weekday()]})'
                 current_time = datetime.datetime.now().strftime('%Y. %m. %d. %H:%M')
+                
+                # Ⅰ~Ⅸ단원 동적 텍스트 변수 정의
+                if target_energy == '태양광 (Solar)':
+                    bg_need_1 = '지구 온난화 및 기후 변화로 인해 태양광 발전의 일사량 간헐성이 전력망 운영 한계치에 다다르고 있음.'
+                    bg_need_2 = '특히 기습적인 구름 유입 및 미세먼지로 인한 급격한 발전량 강하(Drop) 현상으로 송배전 전압 안정이 위협받음.'
+                    bg_need_3 = '이에 고정밀 AI LSTM 일사량 감응 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.'
+                    bg_purpose_1 = f'익일의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
+                    bg_purpose_2 = '예상되는 주간 과전압 리스크를 최소화하고, ESS(에너지저장장치) 충·방전 스케줄링을 최적화하며 계통 전압을 안정 범위 이내로 통제하는 데 기여함을 목적으로 함.'
+                    
+                    arch_input_dim = '9차원 기상 피처 (기온, 풍속, 습도, 미세먼지농도, 일사량, 시간/월 주기 인자)'
+                    
+                    vi_opinion_a = '일출(06시)부터 일몰(20시)까지 일사량 패턴에 감응하여 매끄러운 단봉형(Bell-shape) 발전 곡선을 형성함.'
+                    vi_opinion_b = '정오 시간대(12~14시)에 출력이 고도로 밀집되므로 해당 시간대 배전 선로 과전압 유의 바람.'
+                    
+                    vii_ramping_a = '일출/일몰 전후 광량 변화로 인한 램핑률이 감지되나 계통 순간 동적 예비력은 안정 범위임.'
+                    vii_ramping_b = '단, 급격한 구름 유입에 대비하여 부하 조절용 ESS 가동 대기가 요망됨.'
+                    
+                    road_study_1 = '실제 발전 실측치와 AI 예측 오차를 분석하여 일사 감응 피드백 오차 보정 학습을 진행함.'
+                    road_vpp_2 = '스마트 인버터 원격 출력 제어 기술 및 분산 태양광 실시간 수집 연계 소프트웨어를 정비할 예정임.'
+                else: # 풍력 (Wind)
+                    bg_need_1 = '지구 온난화 및 기후 변화로 인해 풍력 발전의 거대 기압골 변동성이 전력망 운영 한계치에 다다르고 있음.'
+                    bg_need_2 = '특히 돌발적인 무풍(Calm) 현상 또는 태풍급 강풍에 따른 급격한 출력 차단(Cut-out)으로 계통 주파수 상실 위협이 증대됨.'
+                    bg_need_3 = '이에 고정밀 AI LSTM 풍속/기압 감응 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.'
+                    bg_purpose_1 = f'익일의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
+                    bg_purpose_2 = '예상되는 출력제어(Curtailment) 리스크를 최소화하고, 기동이 빠른 백업 전원과의 실시간 출력 연계 가동을 대기시켜 계통 주파수를 안정 범위(60Hz +-0.2) 이내로 통제하는 데 기여함을 목적으로 함.'
+                    
+                    arch_input_dim = '11차원 기상 피처 (기온, 풍속, 풍속세제곱, 풍향, 습도, 현지기압, 전운량, 시간/월 주기 인자)'
+                    
+                    vi_opinion_a = '주야간 구분 없이 기압골 및 풍속 추이에 유기적으로 대응하여 불규칙하고 역동적인 예측 곡선을 형성함.'
+                    vi_opinion_b = '풍속 변화에 따른 돌발성 램핑(출력 급변) 및 컷인 임계값 경계 구간에서 제어 준비 바람.'
+                    
+                    vii_ramping_a = '바람세기 급변에 따른 순간 램핑률이 감지되나 계통 순간 동적 예비력은 안정 범위임.'
+                    vii_ramping_b = '급격한 출력 저하 시 즉각 출력 보상이 가능한 기동식 가스터빈 백업 전원 제어 대기가 필수적임.'
+                    
+                    road_study_1 = '실제 발전 실측치와 AI 예측 오차를 분석하여 풍속-출력 비선형 곡선(Power Curve) 보정 학습을 진행함.'
+                    road_vpp_2 = '개별 터빈 요잉/피치 제어 연동 기술 및 대용량 풍력단지 통합 VPP 스케줄러를 고도화할 예정임.'
+                
+                if sel_region == '제주도':
+                    road_study_2 = '제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.'
+                else:
+                    road_study_2 = f'{sel_region} 관측소 기상 실측 데이터와의 오차를 피드백하여 피크 오차 보정 학습을 주간 단위로 실시함.'
+
+                # 계통 위험도 및 실무 가이드라인 동적 판정 (풍속 물리 조건 정정 반영)
                 risk_status = '안정'
                 risk_desc = '특이 계통 불안정 징후 없음'
-                guide_a = '기저 발전 공급량의 변화가 제한적일 것으로 보여 전력망 주파수 변동 위협은 낮을 것으로 예상됨.'
-                guide_b = '금일 예측 발전량은 예년 평균 범주 내에 속하므로 송전 계통 과부하 위험이 없음.'
                 if target_energy == '풍력 (Wind)':
-                    if avg_wind_or_insol > 15.0 or peak_energy > 50.0:
+                    max_wind = float(sim_weather_df['풍속(m/s)'].max()) if '풍속(m/s)' in sim_weather_df.columns else 0.0
+                    if max_wind >= 25.0:
+                        risk_status = '경고'
+                        risk_desc = '태풍급 강풍에 따른 터빈 파손 방지 강제 차단(Cut-out) 확정적 위협'
+                        guide_a = '풍속이 안전 한계치인 25m/s를 초과하므로 날개 피치 제어 및 기계식 브레이크를 통한 물리적 터빈 보호 긴급 정지를 실시해야 함.'
+                        guide_b = '실시간 발전 출력이 급격히 상실(Zero-out)될 수 있으므로 대용량 기저 화력 발전원 및 양수 발전기의 즉각 시동 가동 대기를 발령함.'
+                    elif 15.0 <= max_wind < 25.0:
                         risk_status = '주의'
-                        risk_desc = '강풍에 따른 풍력기 자동 차단(Cut-out) 가능성 존재'
-                        guide_a = '풍속 25m/s 초과 시 터빈 기계식 파손 방지를 위한 강제 정지가 발생해 실시간 발전량이 급감할 리스크가 상존함.'
-                        guide_b = '풍력 피크 전력 분산을 위해 백업 양수 발전기 및 기저 화력 발전원과의 실시간 출력 연계 가동 제어 대기가 필수적임.'
-                else:
-                    if avg_wind_or_insol < 0.4:
-                        risk_status = '주의'
-                        risk_desc = '급격한 광량 부족에 따른 태양광 기저 전력 저하'
-                        guide_a = '흐린 날씨 및 미세먼지로 인해 주간 태양광 출력 공급량이 급감하여 주간 계통 여유량이 부족해질 수 있음.'
-                        guide_b = '부하 밀집 지역을 중심으로 가스 터빈 및 즉각 시동식 분산 백업 전원의 예비 작동 대기가 요망됨.'
-                    elif peak_energy > 200.0:
+                        risk_desc = '강풍에 따른 풍력 터빈 일부 자동 차단 및 계통 요동 우려'
+                        guide_a = '일부 고고도 터빈에서 순간 풍속 임계치 도달에 따른 국소적 출력제어가 예상되므로 계통 감시를 강화함.'
+                        guide_b = '풍력 출력 변동에 맞추어 연계된 ESS 충·방전율을 미세 제어하고 백업 전원의 예비 작동을 유지함.'
+                    else:
+                        risk_status = '안정'
+                        risk_desc = f'특이 {sel_region} 풍력 계통 불안정 징후 없음'
+                        guide_a = '예측 풍속이 적정 발전 대역(4~12m/s) 이내에서 안정적으로 분포하므로 주파수 흔들림이나 터빈 과부하 위협은 낮음.'
+                        guide_b = f'{sel_region} 송배전 선로의 용량 초과 우려가 없으므로 일상적인 감시 체계를 유지하고 추가적인 백업 전원 대기는 불요함.'
+                else: # 태양광 (Solar)
+                    avg_insol = float(sim_weather_df['일사(MJ/m2)'].mean()) if '일사(MJ/m2)' in sim_weather_df.columns else 0.0
+                    if peak_energy >= 200.0:
                         risk_status = '주의'
                         risk_desc = '정오 시간대 태양광 쏠림 및 계통 과전압 리스크'
-                        guide_a = '일사량 과다 및 맑은 기후로 인해 정오(12시~14시) 전력 공급량이 과잉 적재되어 배전 전압이 임계치를 초과할 위협이 존재함.'
-                        guide_b = '계통 안정을 위한 ESS 흡수 충전 가동 및 필요시 예비 송전선 차단 등의 출력제어(Curtailment) 준비 필요함.'
+                        guide_a = '맑은 기후로 인해 정오(12시~14시) 전력 공급량이 과잉 적재되어 배전 전압이 임계치를 초과할 위협이 존재함.'
+                        guide_b = '계통 안정을 위해 ESS 흡수 충전을 최대화하고 필요시 예비 송전선 차단 등의 출력제어(Curtailment) 준비를 완료함.'
+                    elif avg_insol < 0.4:
+                        risk_status = '주의'
+                        risk_desc = '광량 부족에 따른 태양광 기저 전력 급감 우려'
+                        guide_a = '흐린 기후 및 미세먼지로 인해 주간 출력 공급량이 평시 대비 급감하여 주간 전력망 여유량이 부족해질 리스크가 상존함.'
+                        guide_b = '부하 밀집 지역을 중심으로 즉각 시동 가동이 가능한 가스터빈 분산 백업 전원의 가동 대기를 요망함.'
+                    else:
+                        risk_status = '안정'
+                        risk_desc = f'특이 {sel_region} 태양광 계통 불안정 징후 없음'
+                        guide_a = '금일 발전 예측량 및 주간 일사량 기조가 평년 범위 내에 속하므로 송전 계통 과부하 위험이 낮음.'
+                        guide_b = '주파수 및 전압 변동 폭이 허용 임계치 이내이므로 정상적인 자동 연계 운전을 유지함.'
                 
                 import matplotlib.font_manager as fm
                 local_font = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'fonts', 'malgun.ttf'))
@@ -333,22 +385,40 @@ def render_report_tab(wind_df, solar_df):
                 
                 plt.rcParams['axes.unicode_minus'] = False
 
-                fig, ax = plt.subplots(figsize=(6.5, 3.2))
-                ax.plot(np.arange(24), hourly_preds, color='#1f77b4', linewidth=2.5, marker='o', markersize=4, label='예측 발전량')
-                ax.fill_between(np.arange(24), hourly_preds, color='#1f77b4', alpha=0.15)
+                fig, ax1 = plt.subplots(figsize=(6.5, 3.2))
+                line1 = ax1.plot(np.arange(24), hourly_preds, color='#1f77b4', linewidth=2.5, marker='o', markersize=4, label='예측 발전량')
+                ax1.fill_between(np.arange(24), hourly_preds, color='#1f77b4', alpha=0.15)
+                ax1.set_ylabel('발전량 (MWh)', color='#1f77b4', fontsize=8)
+                ax1.tick_params(axis='y', labelcolor='#1f77b4', labelsize=8)
+                
+                ax2 = ax1.twinx()
+                if target_energy == '태양광 (Solar)':
+                    weather_vals = sim_weather_df['일사(MJ/m2)'].values
+                    weather_lbl = '예측 일사량 (MJ/m2)'
+                    weather_color = '#d62728'
+                else:
+                    weather_vals = sim_weather_df['풍속(m/s)'].values
+                    weather_lbl = '예측 풍속 (m/s)'
+                    weather_color = '#2ca02c'
+                line2 = ax2.plot(np.arange(24), weather_vals, color=weather_color, linewidth=2.0, linestyle='--', marker='s', markersize=3, label=weather_lbl)
+                ax2.set_ylabel(weather_lbl, color=weather_color, fontsize=8)
+                ax2.tick_params(axis='y', labelcolor=weather_color, labelsize=8)
+                
+                lines = line1 + line2
+                labels = [l.get_label() for l in lines]
                 
                 if font_prop:
-                    ax.set_title(f'{formatted_target_date} {sel_region} {target_energy} 24시간 예측 흐름', fontsize=10, fontweight='bold', pad=10, fontproperties=font_prop)
-                    ax.set_xlabel('시간 (시)', fontsize=8, fontproperties=font_prop)
-                    ax.set_ylabel('발전량 (MWh)', fontsize=8, fontproperties=font_prop)
-                    ax.legend(fontsize=8, loc='upper left', prop=font_prop)
+                    ax1.set_title(f'{formatted_target_date} {sel_region} {target_energy} 24시간 예측 흐름', fontsize=10, fontweight='bold', pad=10, fontproperties=font_prop)
+                    ax1.set_xlabel('시간 (시)', fontsize=8, fontproperties=font_prop)
+                    ax1.set_ylabel('발전량 (MWh)', color='#1f77b4', fontsize=8, fontproperties=font_prop)
+                    ax2.set_ylabel(weather_lbl, color=weather_color, fontsize=8, fontproperties=font_prop)
+                    ax1.legend(lines, labels, fontsize=8, loc='upper left', prop=font_prop)
                 else:
-                    ax.set_title(f'{formatted_target_date} {sel_region} {target_energy} 24시간 예측 흐름', fontsize=10, fontweight='bold', pad=10)
-                    ax.set_xlabel('시간 (시)', fontsize=8)
-                    ax.set_ylabel('발전량 (MWh)', fontsize=8)
-                    ax.legend(fontsize=8, loc='upper left')
-                ax.set_xticks(np.arange(0, 24, 3))
-                ax.grid(True, linestyle='--', alpha=0.5)
+                    ax1.set_title(f'{formatted_target_date} {sel_region} {target_energy} 24시간 예측 흐름', fontsize=10, fontweight='bold', pad=10)
+                    ax1.set_xlabel('시간 (시)', fontsize=8)
+                    ax1.legend(lines, labels, fontsize=8, loc='upper left')
+                ax1.set_xticks(np.arange(0, 24, 3))
+                ax1.grid(True, linestyle='--', alpha=0.5)
 
                 os.makedirs(DOCS_PATH, exist_ok=True)
                 temp_chart_path = os.path.join(DOCS_PATH, 'temp_report_chart.png')
@@ -371,16 +441,16 @@ def render_report_tab(wind_df, solar_df):
                             f'---\n\n' \
                             f'### Ⅰ. 예측 배경 및 목적\n' \
                             f'  1. **배경 및 필요성** :\n' \
-                            f'    가. 지구 온난화 및 기후 변화로 인해 재생에너지(태양광 및 풍력)의 기상 변동성이 전력망 운영 한계치에 다다르고 있음.\n' \
-                            f'    나. 특히 분산 전원의 급격한 램핑 현상 및 돌발성 출력 단절로 인하여 송전 계통의 계통 주파수 상실 위협이 증대됨.\n' \
-                            f'    다. 이에 고정밀 AI LSTM 가중치 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.\n' \
+                            f'    가. {bg_need_1}\n' \
+                            f'    나. {bg_need_2}\n' \
+                            f'    다. {bg_need_3}\n' \
                             f'  2. **추진 목적** :\n' \
-                            f'    가. 익일의 예상 날씨에 기초한 전국 지자체 및 제주 로컬 발전 기여 전력량을 사전 연산함.\n' \
-                            f'    나. 예상되는 출력제어(Curtailment) 리스크를 최소화하고, 송배전 선로의 국소 과전압 장애를 예방하며 계통 주파수를 안정 범위(60Hz +-0.2) 이내로 통제하는 데 기여함을 목적으로 함.\n\n' \
+                            f'    가. {bg_purpose_1}\n' \
+                            f'    나. {bg_purpose_2}\n\n' \
                             f'---\n\n' \
                             f'### Ⅱ. AI 예측 모델 아키텍처 및 하이퍼파라미터 명세\n' \
                             f'  1. **신경망 아키텍처 사양** :\n' \
-                            f'    가. 네트워크 종류 : LSTM 순환 신경망 모델  /  입력층 차원 : {"9차원 기상 피처" if target_energy=="태양광 (Solar)" else "11차원 기상 피처"}\n' \
+                            f'    가. 네트워크 종류 : LSTM 순환 신경망 모델  /  입력층 차원 : {arch_input_dim}\n' \
                             f'    나. 모델 은닉층 크기 : 64 차원 (Single LSTM Cell)  /  출력층 크기 : 1차원\n' \
                             f'  2. **최적화 및 학습 하이퍼파라미터** :\n' \
                             f'    가. 학습 최적화 알고리즘 : Adam Optimizer (LR = 0.001)  /  손실함수 : MSE Loss\n' \
@@ -389,7 +459,7 @@ def render_report_tab(wind_df, solar_df):
                             f'### Ⅲ. 예보 일자 및 타겟 사양 명세\n' \
                             f'  1. **적용 대상 일자** : {formatted_target_date}\n' \
                             f'  2. **분석 타겟 지역** : {sel_region} 행정구역 전역\n' \
-                            f'  3. **적용 예측 모델** : {"LSTM 및 GPS v2 모델" if use_gps_v2 else "LSTM 지자체별 독립 적합 신경망"}\n' \
+                            f'  3. **적용 예측 모델** : {"LSTM 및 GPS v2 초국소 연합 신경망" if (sel_region == "제주도" and use_gps_v2) else "LSTM 지자체별/지역별 독립 적합 신경망"}\n' \
                             f'  4. **기상 입력 모드** : {"AI 확률 날씨 생성 시퀀스" if use_stochastic else "실시간 예보 연동 날씨 데이터"}\n\n' \
                             f'---\n\n' \
                             f'### Ⅳ. 종합 기상 분석 및 발전 예측 요약\n' \
@@ -412,16 +482,16 @@ def render_report_tab(wind_df, solar_df):
                              f'### Ⅵ. 시간대별 발전 예측 시계열 분석 차트\n' \
                              f'![24시간 예측 그래프](data:image/png;base64,{encoded_chart})\n\n' \
                              f'  1. **시계열 흐름 분석 의견** :\n' \
-                             f'    가. 인공지능이 도출한 24시간 발전 추세선은 기상 변동 인자와 강한 상관성을 가지며 매끄러운 에너지 기조를 형성함.\n' \
-                             f'    나. 피크 아워 전후의 급경사 램핑 구간에서 계통 주파수 흔들림이 있을 수 있으니 제어 준비 바람.\n\n' \
+                             f'    가. {vi_opinion_a}\n' \
+                             f'    나. {vi_opinion_b}\n\n' \
                              f'---\n\n' \
                              f'### Ⅶ. 시계열 흐름 세부 해석 및 계통 변동성(Ramping Rate) 분석 의견\n' \
                              f'  1. **발전 램핑률(Ramping Rate) 정량 분석 결과** :\n' \
                              f'    가. 금일 발생 예상되는 최대 시간당 발전량 변동폭 : **{max_ramping:.2f} MWh/hr**\n' \
                              f'    나. 최대 변동성 발생 타겟 시각 : **{max_ramping_hour:02d}:00** 전후 발생 판정\n' \
                              f'  2. **계통 영향성 종합 의견** :\n' \
-                             f'    가. 순간 램핑률이 한계치(30MWh/hr) 미만으로 감지되어 계통 순간 동적 예비력은 안정 범위임.\n' \
-                             f'    나. 단, 급경사 램핑에 대응하기 위해 기동이 빠른 양수발전기 연계 제어 대기가 필수적임.\n\n' \
+                             f'    가. {vii_ramping_a}\n' \
+                             f'    나. {vii_ramping_b}\n\n' \
                              f'---\n\n' \
                              f'### Ⅷ. 전력 계통 안정성 검토 및 조치 가이드라인\n' \
                              f'  1. **계통 위험도 평가 결과** : **[{risk_status}] {risk_desc}**\n' \
@@ -431,10 +501,10 @@ def render_report_tab(wind_df, solar_df):
                              f'---\n\n' \
                              f'### Ⅸ. 향후 2단계 추진 계획 및 초국소 VPP 최적화 로드맵\n' \
                              f'  1. **예측 모델 보정 및 재학습 일정** :\n' \
-                             f'    가. 실제 발전 실측치와 AI 예측 오차를 분석하여 피드백 오차 보정 학습을 진행함.\n' \
-                             f'    나. 제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.\n' \
+                             f'    가. {road_study_1}\n' \
+                             f'    나. {road_study_2}\n' \
                              f'  2. **가상발전소(VPP) 연계망 고도화** :\n' \
-                             f'    가. 예측 제고 정산금 획득 기준에 최적화되도록 분산 자원 실시간 수집 연계 소프트웨어를 정비할 예정임.\n\n' \
+                             f'    가. {road_vpp_2}\n\n' \
                              f'---\n' \
                              f'※ 본 보고서는 전력 계통 사전 통제용 분석 결과로, 실제 전력거래소 실측 실적치와는 차이가 발생할 수 있으며 센서 결함 및 이변 환경에 따라 상시 오차가 감지될 수 있음을 고지함.'
 
@@ -493,13 +563,13 @@ def render_report_tab(wind_df, solar_df):
                 pdf.cell(0, 8, title_i, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
                 pdf.add_bullet(2, '1. 배경 및 필요성 :', '')
-                pdf.add_bullet(6, '가. ', '지구 온난화 및 기후 변화로 인해 재생에너지(태양광 및 풍력)의 기상 변동성이 전력망 운영 한계치에 다다르고 있음.')
-                pdf.add_bullet(6, '나. ', '특히 분산 전원의 급격한 램핑 현상 및 돌발성 출력 단절로 인하여 송전 계통의 계통 주파수 상실 위협이 증대됨.')
-                pdf.add_bullet(6, '다. ', '이에 고정밀 AI LSTM 가중치 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.')
+                pdf.add_bullet(6, '가. ', bg_need_1)
+                pdf.add_bullet(6, '나. ', bg_need_2)
+                pdf.add_bullet(6, '다. ', bg_need_3)
                 pdf.ln(2)
                 pdf.add_bullet(2, '2. 추진 목적 :', '')
-                pdf.add_bullet(6, '가. ', '익일의 예상 날씨에 기초한 전국 지자체 및 제주 로컬 발전 기여 전력량을 사전 연산함.')
-                pdf.add_bullet(6, '나. ', '예상되는 출력제어(Curtailment) 리스크를 최소화하고, 송배전 선로의 국소 과전압 장애를 예방하며 계통 주파수를 안정 범위(60Hz +-0.2) 이내로 통제하는 데 기여함을 목적으로 함.')
+                pdf.add_bullet(6, '가. ', bg_purpose_1)
+                pdf.add_bullet(6, '나. ', bg_purpose_2)
                 pdf.ln(4)
 
                 title_ii = '\u2161. AI \uc608\uce21 \ubaa8\ub378 \uc544\ud0a4\ud14d\ucc98 \ubc0f \ud558\uc774\ud37c\ud30c\ub77c\ubbf8\ud130 \uba85\uc138'
@@ -507,7 +577,7 @@ def render_report_tab(wind_df, solar_df):
                 pdf.cell(0, 8, title_ii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
                 pdf.add_bullet(2, '1. 신경망 아키텍처 사양 :', '')
-                pdf.add_bullet(6, '가. ', '네트워크 종류 : LSTM 순환 신경망 모델  /  입력층 차원 : ' + ('9차원 기상 피처' if target_energy=='태양광 (Solar)' else '11차원 기상 피처'))
+                pdf.add_bullet(6, '가. ', '네트워크 종류 : LSTM 순환 신경망 모델  /  입력층 차원 : ' + arch_input_dim)
                 pdf.add_bullet(6, '나. ', '모델 은닉층 크기 : 64 차원 (Single LSTM Cell)  /  출력층 크기 : 1차원')
                 pdf.ln(2)
                 pdf.add_bullet(2, '2. 최적화 및 학습 하이퍼파라미터 :', '')
@@ -521,7 +591,7 @@ def render_report_tab(wind_df, solar_df):
                 pdf.set_font('Malgun', '', 9)
                 pdf.add_bullet(2, '1. 적용 대상 일자 : ', formatted_target_date, h=5.2)
                 pdf.add_bullet(2, '2. 분석 타겟 지역 : ', f'{sel_region} 행정구역 전역', h=5.2)
-                pdf.add_bullet(2, '3. 적용 예측 모델 : ', 'LSTM 및 GPS v2 모델' if use_gps_v2 else 'LSTM 지자체별 독립 적합 신경망', h=5.2)
+                pdf.add_bullet(2, '3. 적용 예측 모델 : ', 'LSTM 및 GPS v2 초국소 연합 신경망' if (sel_region == '제주도' and use_gps_v2) else 'LSTM 지자체별/지역별 독립 적합 신경망', h=5.2)
                 pdf.add_bullet(2, '4. 기상 입력 모드 : ', 'AI 확률 날씨 생성 시퀀스' if use_stochastic else '실시간 예보 연동 날씨 데이터', h=5.2)
                 pdf.ln(4)
 
@@ -543,9 +613,9 @@ def render_report_tab(wind_df, solar_df):
                 pdf.set_font('Malgun', 'B', 8)
                 col_w = [45, 45, 45, 45]
                 pdf.cell(col_w[0], 5, '시간대', border=1, fill=True, align='C')
-                pdf.cell(col_w[1], 5, '기온(C)', border=1, fill=True, align='C')
-                pdf.cell(col_w[2], 5, '일사량' if target_energy=='태양광 (Solar)' else '풍속', border=1, fill=True, align='C')
-                pdf.cell(col_w[3], 5, '예상 발전량', border=1, fill=True, ln=1, align='C')
+                pdf.cell(col_w[1], 5, '기온(°C)', border=1, fill=True, align='C')
+                pdf.cell(col_w[2], 5, '일사량(MJ/m2)' if target_energy=='태양광 (Solar)' else '풍속(m/s)', border=1, fill=True, align='C')
+                pdf.cell(col_w[3], 5, '예상 발전량(MWh)', border=1, fill=True, ln=1, align='C')
                 
                 pdf.set_text_color(50, 50, 50)
                 pdf.set_font('Malgun', '', 8)
@@ -571,8 +641,8 @@ def render_report_tab(wind_df, solar_df):
                 pdf.set_font('Malgun', 'B', 10)
                 pdf.add_bullet(2, '1. 시계열 흐름 분석 의견 :', '', h=6)
                 pdf.set_font('Malgun', '', 9)
-                pdf.add_bullet(6, '가. ', '인공지능이 도출한 24시간 발전 추세선은 기상 변동 인자와 강한 상관성을 가지며 매끄러운 에너지 기조를 형성함.')
-                pdf.add_bullet(6, '나. ', '피크 아워 전후의 급경사 램핑 구간에서 계통 주파수 흔들림이 있을 수 있으니 제어 준비 바람.')
+                pdf.add_bullet(6, '가. ', vi_opinion_a)
+                pdf.add_bullet(6, '나. ', vi_opinion_b)
 
                 # ==================== 3페이지 작성 (Ⅶ, Ⅷ, Ⅸ) ====================
                 pdf.add_page()
@@ -585,8 +655,8 @@ def render_report_tab(wind_df, solar_df):
                 pdf.add_bullet(6, '나. ', f'최대 변동성 발생 타겟 시각 : {max_ramping_hour:02d}:00 전후 발생 판정', h=5.2)
                 pdf.ln(2)
                 pdf.add_bullet(2, '2. 계통 영향성 종합 의견 :', '', h=5.2)
-                pdf.add_bullet(6, '가. ', '순간 램핑률이 한계치(30MWh/hr) 미만으로 감지되어 계통 순간 동적 예비력은 안정 범위임.', h=5.2)
-                pdf.add_bullet(6, '나. ', '단, 급경사 램핑에 대응하기 위해 기동이 빠른 양수발전기 연계 제어 대기가 필수적임.', h=5.2)
+                pdf.add_bullet(6, '가. ', vii_ramping_a, h=5.2)
+                pdf.add_bullet(6, '나. ', vii_ramping_b, h=5.2)
                 pdf.ln(5)
 
                 title_viii = '\u2167. \uc804\ub825 \uacc4\ud1b5 \uc548\uc815\uc131 \uac80\ud1a0 \ubc0f \uc870\uce58 \uac00\uc774\ub4dc\ub77c\uc778'
@@ -605,11 +675,11 @@ def render_report_tab(wind_df, solar_df):
                 pdf.cell(0, 8, title_ix, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
                 pdf.add_bullet(2, '1. 예측 모델 보정 및 재학습 일정 :', '', h=5.5)
-                pdf.add_bullet(6, '가. ', '실제 발전 실측치와 AI 예측 오차를 분석하여 피드백 오차 보정 학습을 진행함.', h=5.5)
-                pdf.add_bullet(6, '나. ', '제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.', h=5.5)
+                pdf.add_bullet(6, '가. ', road_study_1, h=5.5)
+                pdf.add_bullet(6, '나. ', road_study_2, h=5.5)
                 pdf.ln(2)
                 pdf.add_bullet(2, '2. 가상발전소(VPP) 연계망 고도화 :', '', h=5.5)
-                pdf.add_bullet(6, '가. ', '예측 제고 정산금 획득 기준에 최적화되도록 분산 자원 실시간 수집 연계 소프트웨어를 정비할 예정임.', h=5.5)
+                pdf.add_bullet(6, '가. ', road_vpp_2, h=5.5)
                 pdf.ln(8)
                 
                 pdf.set_font('Malgun', '', 8.5)

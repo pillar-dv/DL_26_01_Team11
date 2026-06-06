@@ -281,12 +281,6 @@ with tab_wind:
                                     pred_scaled_stage = m_wind_gps(input_tensor_stage).cpu().numpy()
                                 pred_actual_stage = sy_wind_gps[stage].inverse_transform(pred_scaled_stage)
                                 pred_val = float(np.maximum(pred_actual_stage[0][0], 0))
-                                
-                                # 풍속 컷인 물리 가드: 풍속 2.0m/s 미만 시 발전량 강제 0
-                                wind_spd = sim_df_w.iloc[t]['풍속(m/s)']
-                                if wind_spd < 2.0:
-                                    pred_val = 0.0
-                                    
                                 stage_hourly_series[stage].append(pred_val)
                             
                             stage_sum = sum(stage_hourly_series[stage])
@@ -314,12 +308,6 @@ with tab_wind:
                                 pred_scaled_w = m_wind(input_tensor_w).cpu().numpy()
                             pred_actual_w = sy_wind[sim_region_wind].inverse_transform(pred_scaled_w)
                             pred_val = float(np.maximum(pred_actual_w[0][0], 0))
-                            
-                            # 풍속 컷인 물리 가드: 풍속 2.0m/s 미만 시 발전량 강제 0
-                            wind_spd = sim_df_w.iloc[t]['풍속(m/s)']
-                            if wind_spd < 2.0:
-                                pred_val = 0.0
-                                
                             hourly_preds_w.append(pred_val)
                         sim_result_w = sum(hourly_preds_w)
                     elif sim_region_wind == '제주도' and m_wind_jeju is not None:
@@ -340,9 +328,13 @@ with tab_wind:
                 m_col1, m_col2 = st.columns(2)
                 m_col1.metric(label=f"🌪️ 예상 일일 총 풍력 발전량", value=f"{sim_result_w:.2f} MWh")
                 
-                avg_wind_speed = float(sim_df_w['풍속(m/s)'].mean())
-                if avg_wind_speed > 15: m_col2.error("⚠️ 강풍 발생! 터빈 제어(Cut-out) 리스크 발생")
-                else: m_col2.success("✅ 안정적인 발전이 예상됩니다.")
+                max_wind = float(sim_df_w['풍속(m/s)'].max()) if '풍속(m/s)' in sim_df_w.columns else 0.0
+                if max_wind >= 25.0:
+                    m_col2.error("❌ 경고: 태풍급 강풍 발생! 물리적 터빈 보호 강제 차단(Cut-out) 확정적 위협")
+                elif 15.0 <= max_wind < 25.0:
+                    m_col2.warning("⚠️ 주의: 강풍 발생! 풍력 터빈 일부 자동 차단 및 계통 요동 우려")
+                else:
+                    m_col2.success(f"✅ 안정: 특이 {sim_region_wind} 풍력 계통 불안정 징후 없음")
                 
                 st.divider()
                 
@@ -401,12 +393,56 @@ with tab_wind:
                                     delta_color="off"
                                 )
                     else:
-                        st.markdown("##### 📈 24시간 예상 풍력 발전량 흐름")
-                        chart_data = pd.DataFrame({
-                            '시간': np.arange(24),
-                            '예상 발전량 (MWh)': hourly_preds_w
-                        }).set_index('시간')
-                        st.line_chart(chart_data, use_container_width=True)
+                        st.markdown("##### 📈 24시간 예상 풍력 발전량 및 풍속 추이")
+                        import matplotlib.pyplot as plt
+                        import matplotlib.font_manager as fm
+                        local_font = os.path.abspath(os.path.join(os.path.dirname(__file__), 'fonts', 'malgun.ttf'))
+                        sys_font = r'C:\Windows\Fonts\malgun.ttf'
+                        font_name = None
+                        font_prop = None
+                        if os.path.exists(local_font):
+                            try:
+                                font_name = fm.FontProperties(fname=local_font).get_name()
+                                fm.fontManager.addfont(local_font)
+                                font_prop = fm.FontProperties(fname=local_font)
+                            except Exception: pass
+                        if font_prop is None and os.path.exists(sys_font):
+                            try:
+                                font_name = fm.FontProperties(fname=sys_font).get_name()
+                                fm.fontManager.addfont(sys_font)
+                                font_prop = fm.FontProperties(fname=sys_font)
+                            except Exception: pass
+                        
+                        if font_name:
+                            plt.rcParams['font.family'] = font_name
+                        else:
+                            plt.rcParams['font.family'] = 'sans-serif'
+                        plt.rcParams['axes.unicode_minus'] = False
+                        
+                        fig, ax1 = plt.subplots(figsize=(6, 3.5))
+                        line1 = ax1.plot(np.arange(24), hourly_preds_w, color='#1f77b4', linewidth=2.0, marker='o', markersize=3, label='예상 발전량')
+                        ax1.fill_between(np.arange(24), hourly_preds_w, color='#1f77b4', alpha=0.15)
+                        ax1.set_xlabel('시간 (시)', fontsize=8)
+                        ax1.set_ylabel('발전량 (MWh)', color='#1f77b4', fontsize=8)
+                        ax1.tick_params(axis='y', labelcolor='#1f77b4', labelsize=8)
+                        ax1.set_xticks(np.arange(0, 24, 3))
+                        
+                        ax2 = ax1.twinx()
+                        wind_speeds = sim_df_w['풍속(m/s)'].values
+                        line2 = ax2.plot(np.arange(24), wind_speeds, color='#2ca02c', linewidth=1.5, linestyle='--', marker='s', markersize=3, label='예측 풍속')
+                        ax2.set_ylabel('풍속 (m/s)', color='#2ca02c', fontsize=8)
+                        ax2.tick_params(axis='y', labelcolor='#2ca02c', labelsize=8)
+                        
+                        lines = line1 + line2
+                        labels = [l.get_label() for l in lines]
+                        if font_prop:
+                            ax1.legend(lines, labels, fontsize=8, loc='upper left', prop=font_prop)
+                            ax1.set_title("24시간 예상 발전량 및 풍속 시계열 흐름", fontsize=10, fontweight='bold', fontproperties=font_prop)
+                        else:
+                            ax1.legend(lines, labels, fontsize=8, loc='upper left')
+                            ax1.set_title("24시간 예상 발전량 및 풍속 시계열 흐름", fontsize=10, fontweight='bold')
+                        ax1.grid(True, linestyle='--', alpha=0.5)
+                        st.pyplot(fig)
 
 # ==========================================
 # 탭 2: 태양광 발전량 시뮬레이터
@@ -502,9 +538,14 @@ with tab_solar:
                 m_col1, m_col2 = st.columns(2)
                 m_col1.metric(label=f"☀️ 예상 일일 총 태양광 발전량", value=f"{sim_result_s:.2f} MWh")
                 
-                avg_insol = float(sim_df_s['일사(MJ/m2)'].mean())
-                if avg_insol < 0.5: m_col2.warning("☁️ 흐린 날씨로 인해 발전량 저하가 예상됩니다.")
-                else: m_col2.success("✅ 원활한 태양광 발전이 예상됩니다.")
+                peak_energy_s = max(hourly_preds_s) if hourly_preds_s else 0.0
+                avg_insol_val = float(sim_df_s['일사(MJ/m2)'].mean()) if '일사(MJ/m2)' in sim_df_s.columns else 0.0
+                if peak_energy_s >= 200.0:
+                    m_col2.warning("⚠️ 주의: 정오 시간대 태양광 쏠림 및 계통 과전압 리스크")
+                elif avg_insol_val < 0.4:
+                    m_col2.warning("☁️ 주의: 광량 부족에 따른 태양광 기저 전력 급감 우려")
+                else:
+                    m_col2.success(f"✅ 안정: 특이 {sim_region_solar} 태양광 계통 불안정 징후 없음")
                 
                 st.divider()
                 
@@ -516,12 +557,56 @@ with tab_solar:
                     map_df = pd.DataFrame(map_data)
                     if not map_df.empty: st.map(map_df, zoom=6)
                 with v_col2:
-                    st.markdown("##### 📈 24시간 예상 태양광 발전량 흐름")
-                    chart_data = pd.DataFrame({
-                        '시간': np.arange(24),
-                        '예상 발전량 (MWh)': hourly_preds_s
-                    }).set_index('시간')
-                    st.line_chart(chart_data, use_container_width=True)
+                    st.markdown("##### 📈 24시간 예상 태양광 발전량 및 일사량 추이")
+                    import matplotlib.pyplot as plt
+                    import matplotlib.font_manager as fm
+                    local_font = os.path.abspath(os.path.join(os.path.dirname(__file__), 'fonts', 'malgun.ttf'))
+                    sys_font = r'C:\Windows\Fonts\malgun.ttf'
+                    font_name = None
+                    font_prop = None
+                    if os.path.exists(local_font):
+                         try:
+                             font_name = fm.FontProperties(fname=local_font).get_name()
+                             fm.fontManager.addfont(local_font)
+                             font_prop = fm.FontProperties(fname=local_font)
+                         except Exception: pass
+                    if font_prop is None and os.path.exists(sys_font):
+                         try:
+                             font_name = fm.FontProperties(fname=sys_font).get_name()
+                             fm.fontManager.addfont(sys_font)
+                             font_prop = fm.FontProperties(fname=sys_font)
+                         except Exception: pass
+                     
+                    if font_name:
+                         plt.rcParams['font.family'] = font_name
+                    else:
+                         plt.rcParams['font.family'] = 'sans-serif'
+                    plt.rcParams['axes.unicode_minus'] = False
+                     
+                    fig, ax1 = plt.subplots(figsize=(6, 3.5))
+                    line1 = ax1.plot(np.arange(24), hourly_preds_s, color='#1f77b4', linewidth=2.0, marker='o', markersize=3, label='예상 발전량')
+                    ax1.fill_between(np.arange(24), hourly_preds_s, color='#1f77b4', alpha=0.15)
+                    ax1.set_xlabel('시간 (시)', fontsize=8)
+                    ax1.set_ylabel('발전량 (MWh)', color='#1f77b4', fontsize=8)
+                    ax1.tick_params(axis='y', labelcolor='#1f77b4', labelsize=8)
+                    ax1.set_xticks(np.arange(0, 24, 3))
+                     
+                    ax2 = ax1.twinx()
+                    insol_vals = sim_df_s['일사(MJ/m2)'].values
+                    line2 = ax2.plot(np.arange(24), insol_vals, color='#d62728', linewidth=1.5, linestyle='--', marker='s', markersize=3, label='예측 일사량')
+                    ax2.set_ylabel('일사량 (MJ/m2)', color='#d62728', fontsize=8)
+                    ax2.tick_params(axis='y', labelcolor='#d62728', labelsize=8)
+                     
+                    lines = line1 + line2
+                    labels = [l.get_label() for l in lines]
+                    if font_prop:
+                         ax1.legend(lines, labels, fontsize=8, loc='upper left', prop=font_prop)
+                         ax1.set_title("24시간 예상 발전량 및 일사량 시계열 흐름", fontsize=10, fontweight='bold', fontproperties=font_prop)
+                    else:
+                         ax1.legend(lines, labels, fontsize=8, loc='upper left')
+                         ax1.set_title("24시간 예상 발전량 및 일사량 시계열 흐름", fontsize=10, fontweight='bold')
+                    ax1.grid(True, linestyle='--', alpha=0.5)
+                    st.pyplot(fig)
 
 # ==========================================
 # 탭 3: AI 성능 분석 및 트러블슈팅
