@@ -495,6 +495,17 @@ with tab_solar:
                     else: sim_df_s['일사(MJ/m2)'] = sim_insol
                     sim_df_s['기온(°C)'] = sim_df_s['기온(°C)'] + (sim_temp_s - default_temp_s)
                 
+                # 태양광 기상 데이터 가드 (기온과 일사량 스왑 오류 방어)
+                if '기온(°C)' in sim_df_s.columns and '일사(MJ/m2)' in sim_df_s.columns:
+                    day_df = sim_df_s[(sim_df_s['시간'] >= 10) & (sim_df_s['시간'] <= 16)]
+                    if not day_df.empty:
+                        avg_temp_day = day_df['기온(°C)'].mean()
+                        avg_insol_day = day_df['일사(MJ/m2)'].mean()
+                        if avg_insol_day > avg_temp_day:
+                            temp_vals = sim_df_s['기온(°C)'].copy()
+                            sim_df_s['기온(°C)'] = sim_df_s['일사(MJ/m2)'].copy()
+                            sim_df_s['일사(MJ/m2)'] = temp_vals
+                            
                 # 롤링 예측을 위한 48시간 기상 확장 생성
                 sim_df_extended = pd.concat([sim_df_s, sim_df_s], ignore_index=True)
                 sim_df_extended['시간'] = np.arange(48) % 24
@@ -537,11 +548,21 @@ with tab_solar:
                 
                 m_col1, m_col2 = st.columns(2)
                 m_col1.metric(label=f"☀️ 예상 일일 총 태양광 발전량", value=f"{sim_result_s:.2f} MWh")
+                is_noon_dip_s = False
+                if not sim_df_s.empty:
+                    insol_10_s = float(sim_df_s[sim_df_s['시간'] == 10]['일사(MJ/m2)'].values[0]) if not sim_df_s[sim_df_s['시간'] == 10].empty else 0.0
+                    insol_12_s = float(sim_df_s[sim_df_s['시간'] == 12]['일사(MJ/m2)'].values[0]) if not sim_df_s[sim_df_s['시간'] == 12].empty else 0.0
+                    insol_14_s = float(sim_df_s[sim_df_s['시간'] == 14]['일사(MJ/m2)'].values[0]) if not sim_df_s[sim_df_s['시간'] == 14].empty else 0.0
+                    if insol_12_s < insol_10_s * 0.9 or insol_12_s < insol_14_s * 0.9:
+                        is_noon_dip_s = True
                 
                 peak_energy_s = max(hourly_preds_s) if hourly_preds_s else 0.0
                 avg_insol_val = float(sim_df_s['일사(MJ/m2)'].mean()) if '일사(MJ/m2)' in sim_df_s.columns else 0.0
                 if peak_energy_s >= 200.0:
-                    m_col2.warning("⚠️ 주의: 정오 시간대 태양광 쏠림 및 계통 과전압 리스크")
+                    if is_noon_dip_s:
+                        m_col2.warning("⚠️ 주의: 정오 시간대 구름 유입 및 일시적 광량 급감(Dip) 리스크")
+                    else:
+                        m_col2.warning("⚠️ 주의: 정오 시간대 태양광 쏠림 및 계통 과전압 리스크")
                 elif avg_insol_val < 0.4:
                     m_col2.warning("☁️ 주의: 광량 부족에 따른 태양광 기저 전력 급감 우려")
                 else:

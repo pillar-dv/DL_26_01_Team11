@@ -97,7 +97,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         bg_need_1 = '지구 온난화 및 기후 변화로 인해 태양광 발전의 일사량 간헐성이 전력망 운영 한계치에 다다르고 있음.'
         bg_need_2 = '특히 기습적인 구름 유입 및 미세먼지로 인한 급격한 발전량 강하(Drop) 현상으로 송배전 전압 안정이 위협받음.'
         bg_need_3 = '이에 고정밀 AI LSTM 일사량 감응 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.'
-        bg_purpose_1 = f'익일의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
+        bg_purpose_1 = f'예측 대상 일자({formatted_target_date})의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
         bg_purpose_2 = '예상되는 주간 과전압 리스크를 최소화하고, ESS(에너지저장장치) 충·방전 스케줄링을 최적화하며 계통 전압을 안정 범위 이내로 통제하는 데 기여함을 목적으로 함.'
         
         arch_input_dim = '9차원 기상 피처 (기온, 풍속, 습도, 미세먼지농도, 일사량, 시간/월 주기 인자)'
@@ -105,8 +105,12 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         vi_opinion_a = '일출(06시)부터 일몰(20시)까지 일사량 패턴에 감응하여 매끄러운 단봉형(Bell-shape) 발전 곡선을 형성함.'
         vi_opinion_b = '정오 시간대(12~14시)에 출력이 고도로 밀집되므로 해당 시간대 배전 선로 과전압 유의 바람.'
         
-        vii_ramping_a = '일출/일몰 전후 광량 변화로 인한 램핑률이 감지되나 계통 순간 동적 예비력은 안정 범위임.'
-        vii_ramping_b = '단, 급격한 구름 유입에 대비하여 부하 조절용 ESS 가동 대기가 요망됨.'
+        if max_ramping >= 30.0:
+            vii_ramping_a = f'시간당 최대 램핑률이 관리 임계치(30MWh/hr)를 초과한 {max_ramping:.2f} MWh/hr로 관측되어 계통 불안정 리스크가 높음.'
+            vii_ramping_b = '급격한 기상 변화에 대응할 수 있도록 부하 조절용 ESS 방전 및 신속 시동 가스터빈 백업 가동 대기가 필수적임.'
+        else:
+            vii_ramping_a = f'시간당 최대 램핑률이 관리 임계치(30MWh/hr) 미만인 {max_ramping:.2f} MWh/hr로 관측되어 계통 동적 예비력은 안정 범위임.'
+            vii_ramping_b = '일반적인 계통 연계 예비력 범위 내에서 관리 가능하므로 추가적인 비상 백업 가동은 불요함.'
         
         road_study_1 = '실제 발전 실측치와 AI 예측 오차를 분석하여 일사 감응 피드백 오차 보정 학습을 진행함.'
         road_vpp_2 = '스마트 인버터 원격 출력 제어 기술 및 분산 태양광 실시간 수집 연계 소프트웨어를 정비할 예정임.'
@@ -114,7 +118,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         bg_need_1 = '지구 온난화 및 기후 변화로 인해 풍력 발전의 거대 기압골 변동성이 전력망 운영 한계치에 다다르고 있음.'
         bg_need_2 = '특히 돌발적인 무풍(Calm) 현상 또는 태풍급 강풍에 따른 급격한 출력 차단(Cut-out)으로 계통 주파수 상실 위협이 증대됨.'
         bg_need_3 = '이에 고정밀 AI LSTM 풍속/기압 감응 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.'
-        bg_purpose_1 = f'익일의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
+        bg_purpose_1 = f'예측 대상 일자({formatted_target_date})의 예상 날씨에 기초한 {sel_region} 발전 기여 전력량을 사전 연산함.'
         bg_purpose_2 = '예상되는 출력제어(Curtailment) 리스크를 최소화하고, 기동이 빠른 백업 전원과의 실시간 출력 연계 가동을 대기시켜 계통 주파수를 안정 범위(60Hz +-0.2) 이내로 통제하는 데 기여함을 목적으로 함.'
         
         arch_input_dim = '11차원 기상 피처 (기온, 풍속, 풍속세제곱, 풍향, 습도, 현지기압, 전운량, 시간/월 주기 인자)'
@@ -122,8 +126,12 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         vi_opinion_a = '주야간 구분 없이 기압골 및 풍속 추이에 유기적으로 대응하여 불규칙하고 역동적인 예측 곡선을 형성함.'
         vi_opinion_b = '풍속 변화에 따른 돌발성 램핑(출력 급변) 및 컷인 임계값 경계 구간에서 제어 준비 바람.'
         
-        vii_ramping_a = '바람세기 급변에 따른 순간 램핑률이 감지되나 계통 순간 동적 예비력은 안정 범위임.'
-        vii_ramping_b = '급격한 출력 저하 시 즉각 출력 보상이 가능한 기동식 가스터빈 백업 전원 제어 대기가 필수적임.'
+        if max_ramping >= 30.0:
+            vii_ramping_a = f'바람세기 급변에 따른 시간당 최대 램핑률이 관리 임계치(30MWh/hr)를 초과한 {max_ramping:.2f} MWh/hr로 관측되어 계통 요동이 예상됨.'
+            vii_ramping_b = '풍력 출력 급감 시 즉각적인 전력망 보완을 위해 가동 속도가 빠른 가스터빈 및 양수 발전기의 긴급 예비 시동 대기가 시급함.'
+        else:
+            vii_ramping_a = f'바람세기 변동에 따른 시간당 최대 램핑률이 관리 임계치(30MWh/hr) 미만인 {max_ramping:.2f} MWh/hr로 관측되어 계통 순간 동적 예비력은 안정 범위임.'
+            vii_ramping_b = '일상적인 변동 감시 체계 하에서 통제 가능하므로 추가 백업 가동이나 인위적인 출력제어 준비는 불요함.'
         
         road_study_1 = '실제 발전 실측치와 AI 예측 오차를 분석하여 풍속-출력 비선형 곡선(Power Curve) 보정 학습을 진행함.'
         road_vpp_2 = '개별 터빈 요잉/피치 제어 연동 기술 및 대용량 풍력단지 통합 VPP 스케줄러를 고도화할 예정임.'
@@ -132,6 +140,15 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         road_study_2 = '제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.'
     else:
         road_study_2 = f'{sel_region} 관측소 기상 실측 데이터와의 오차를 피드백하여 피크 오차 보정 학습을 주간 단위로 실시함.'
+
+    # 정오 발전 딥(Dip) 여부 판정 로직
+    is_noon_dip = False
+    if target_energy == '태양광 (Solar)':
+        insol_10 = float(sim_weather_df[sim_weather_df['시간'] == 10]['일사(MJ/m2)'].values[0]) if not sim_weather_df[sim_weather_df['시간'] == 10].empty else 0.0
+        insol_12 = float(sim_weather_df[sim_weather_df['시간'] == 12]['일사(MJ/m2)'].values[0]) if not sim_weather_df[sim_weather_df['시간'] == 12].empty else 0.0
+        insol_14 = float(sim_weather_df[sim_weather_df['시간'] == 14]['일사(MJ/m2)'].values[0]) if not sim_weather_df[sim_weather_df['시간'] == 14].empty else 0.0
+        if insol_12 < insol_10 * 0.9 or insol_12 < insol_14 * 0.9:
+            is_noon_dip = True
 
     # 계통 위험도 및 실무 가이드라인 동적 판정 (풍속 물리 조건 정정 반영)
     risk_status = '안정'
@@ -156,10 +173,16 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     else: # 태양광 (Solar)
         avg_insol_val = float(sim_weather_df['일사(MJ/m2)'].mean()) if '일사(MJ/m2)' in sim_weather_df.columns else 0.0
         if peak_energy >= 200.0:
-            risk_status = '주의'
-            risk_desc = '정오 시간대 태양광 쏠림 및 계통 과전압 리스크'
-            guide_a = '맑은 기후로 인해 정오(12시~14시) 전력 공급량이 과잉 적재되어 배전 전압이 임계치를 초과할 위협이 존재함.'
-            guide_b = '계통 안정을 위해 ESS 흡수 충전을 최대화하고 필요시 예비 송전선 차단 등의 출력제어(Curtailment) 준비를 완료함.'
+            if is_noon_dip:
+                risk_status = '주의'
+                risk_desc = '정오 시간대 구름 유입 및 일시적 광량 급감(Dip) 리스크'
+                guide_a = '정오 부근(12시~14시)에 구름 유입 또는 광량 급감 현상으로 인한 발전량 강하(Dip) 및 전압 요동 위협이 존재함.'
+                guide_b = '급격한 출력 저하 및 전압 보상을 위해 부하 조절용 ESS 방전 대기 및 전력망 전압 조정 장치를 긴급 정비 바람.'
+            else:
+                risk_status = '주의'
+                risk_desc = '정오 시간대 태양광 쏠림 및 계통 과전압 리스크'
+                guide_a = '맑은 기후로 인해 정오(12시~14시) 전력 공급량이 과잉 적재되어 배전 전압이 임계치를 초과할 위협이 존재함.'
+                guide_b = '계통 안정을 위해 ESS 흡수 충전을 최대화하고 필요시 예비 송전선 차단 등의 출력제어(Curtailment) 준비를 완료함.'
         elif avg_insol_val < 0.4:
             risk_status = '주의'
             risk_desc = '광량 부족에 따른 태양광 기저 전력 급감 우려'
