@@ -125,6 +125,19 @@ class PublicSectorPDF(FPDF):
         self.set_text_color(100, 100, 100)
         self.cell(0, 10, f'- {self.page_no()} -', border=0, ln=0, align='C')
 
+    def add_bullet(self, indent_width, bullet_str, text_str, h=5):
+        orig_margin = self.l_margin
+        self.set_x(orig_margin + indent_width)
+        if not text_str:
+            self.cell(0, h, bullet_str, border=0, ln=1)
+            return
+        b_w = self.get_string_width(bullet_str) + 1.5
+        self.cell(b_w, h, bullet_str, border=0, ln=0)
+        self.set_left_margin(orig_margin + indent_width + b_w)
+        self.multi_cell(0, h, text_str)
+        self.set_left_margin(orig_margin)
+
+
 
 def render_report_tab(wind_df, solar_df):
     st.subheader('📋 공문서 및 공기업 규격 일일 전력 발전 예측 보고서 자동 작성 시스템')
@@ -479,35 +492,46 @@ def render_report_tab(wind_df, solar_df):
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_i, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
-                bg_text = '  1. 배경 및 필요성 :\n    가. 지구 온난화 및 기후 변화로 인해 재생에너지(태양광 및 풍력)의 기상 변동성이 전력망 운영 한계치에 다다르고 있음.\n    나. 특히 분산 전원의 급격한 램핑 현상 및 돌발성 출력 단절로 인하여 송전 계통의 계통 주파수 상실 위협이 증대됨.\n    다. 이에 고정밀 AI LSTM 가중치 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.\n\n  2. 추진 목적 :\n    가. 익일의 예상 날씨에 기초한 전국 지자체 및 제주 로컬 발전 기여 전력량을 사전 연산함.\n    나. 예상되는 출력제어(Curtailment) 리스크를 최소화하고, 송배전 선로의 국소 과전압 장애를 예방하며 계통 주파수를 안정 범위(60Hz +-0.2) 이내로 통제하는 데 기여함을 목적으로 함.'
-                pdf.multi_cell(0, 5, bg_text)
+                pdf.add_bullet(2, '1. 배경 및 필요성 :', '')
+                pdf.add_bullet(6, '가. ', '지구 온난화 및 기후 변화로 인해 재생에너지(태양광 및 풍력)의 기상 변동성이 전력망 운영 한계치에 다다르고 있음.')
+                pdf.add_bullet(6, '나. ', '특히 분산 전원의 급격한 램핑 현상 및 돌발성 출력 단절로 인하여 송전 계통의 계통 주파수 상실 위협이 증대됨.')
+                pdf.add_bullet(6, '다. ', '이에 고정밀 AI LSTM 가중치 모델을 활용한 사전 시뮬레이션으로 안정성을 선제 판정할 필요가 있음.')
+                pdf.ln(2)
+                pdf.add_bullet(2, '2. 추진 목적 :', '')
+                pdf.add_bullet(6, '가. ', '익일의 예상 날씨에 기초한 전국 지자체 및 제주 로컬 발전 기여 전력량을 사전 연산함.')
+                pdf.add_bullet(6, '나. ', '예상되는 출력제어(Curtailment) 리스크를 최소화하고, 송배전 선로의 국소 과전압 장애를 예방하며 계통 주파수를 안정 범위(60Hz +-0.2) 이내로 통제하는 데 기여함을 목적으로 함.')
                 pdf.ln(4)
 
                 title_ii = '\u2161. AI \uc608\uce21 \ubaa8\ub378 \uc544\ud0a4\ud14d\ucc98 \ubc0f \ud558\uc774\ud37c\ud30c\ub77c\ubbf8\ud130 \uba85\uc138'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_ii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
-                arch_text = '  1. 신경망 아키텍처 사양 :\n    가. 네트워크 종류 : LSTM 순환 신경망 모델  /  입력층 차원 : ' + ('9차원' if target_energy=='태양광 (Solar)' else '11차원') + ' 기상 피처\n    나. 모델 은닉층 크기 : 64 차원 (Single LSTM Cell)  /  출력층 크기 : 1차원\n  2. 최적화 및 학습 하이퍼파라미터 :\n    가. 학습 최적화 알고리즘 : Adam Optimizer (LR = 0.001)  /  손실함수 : MSE Loss\n    나. 과적합 방지 규제 : Early Stopping (Patience = 15) 및 Dropout (0.2) 적용 완료'
-                pdf.multi_cell(0, 5, arch_text)
+                pdf.add_bullet(2, '1. 신경망 아키텍처 사양 :', '')
+                pdf.add_bullet(6, '가. ', '네트워크 종류 : LSTM 순환 신경망 모델  /  입력층 차원 : ' + ('9차원 기상 피처' if target_energy=='태양광 (Solar)' else '11차원 기상 피처'))
+                pdf.add_bullet(6, '나. ', '모델 은닉층 크기 : 64 차원 (Single LSTM Cell)  /  출력층 크기 : 1차원')
+                pdf.ln(2)
+                pdf.add_bullet(2, '2. 최적화 및 학습 하이퍼파라미터 :', '')
+                pdf.add_bullet(6, '가. ', '학습 최적화 알고리즘 : Adam Optimizer (LR = 0.001)  /  손실함수 : MSE Loss')
+                pdf.add_bullet(6, '나. ', '과적합 방지 규제 : Early Stopping (Patience = 15) 및 Dropout (0.2) 적용 완료')
                 pdf.ln(4)
 
                 title_iii = '\u2162. \uc608\ubcf4 \uc77c\uc790 \ubc0f \ud0c0\uac9f \uc0ac\uc591 \uba85\uc138'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_iii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
-                pdf.cell(0, 5.2, f'  1. 적용 대상 일자 : {formatted_target_date}', border=0, ln=1)
-                pdf.cell(0, 5.2, f'  2. 분석 타겟 지역 : {sel_region} 행정구역 전역', border=0, ln=1)
-                pdf.cell(0, 5.2, f'  3. 적용 예측 모델 : {"LSTM 및 GPS v2 모델" if use_gps_v2 else "LSTM 지자체별 독립 적합 신경망"}', border=0, ln=1)
-                pdf.cell(0, 5.2, f'  4. 기상 입력 모드 : {"AI 확률 날씨 생성 시퀀스" if use_stochastic else "실시간 예보 연동 날씨 데이터"}', border=0, ln=1)
+                pdf.add_bullet(2, '1. 적용 대상 일자 : ', formatted_target_date, h=5.2)
+                pdf.add_bullet(2, '2. 분석 타겟 지역 : ', f'{sel_region} 행정구역 전역', h=5.2)
+                pdf.add_bullet(2, '3. 적용 예측 모델 : ', 'LSTM 및 GPS v2 모델' if use_gps_v2 else 'LSTM 지자체별 독립 적합 신경망', h=5.2)
+                pdf.add_bullet(2, '4. 기상 입력 모드 : ', 'AI 확률 날씨 생성 시퀀스' if use_stochastic else '실시간 예보 연동 날씨 데이터', h=5.2)
                 pdf.ln(4)
 
                 title_iv = '\u2163. \uc885\ud569 \uae30\uc0c1 \ubd84\uc11d \ubc0f \ubc1c\uc804 \uc608\uce21 \uc694\uc57d'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_iv, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
-                pdf.cell(0, 5, f'  1. 일일 누적 예상 발전량 : {total_energy:.2f} MWh', border=0, ln=1)
-                pdf.cell(0, 5, f'  2. 평균 기상 예측 기조 : 평균 기온 {avg_temp:.1f} C, 평균 일사/풍속 {avg_wind_or_insol:.2f}', border=0, ln=1)
-                pdf.cell(0, 5, f'  3. 발전 피크 분석 : 피크 시각 {peak_hour:02d}:00 (순간 최대 {peak_energy:.2f} MWh 예상)', border=0, ln=1)
+                pdf.add_bullet(2, '1. 일일 누적 예상 발전량 : ', f'{total_energy:.2f} MWh')
+                pdf.add_bullet(2, '2. 평균 기상 예측 기조 : ', f'평균 기온 {avg_temp:.1f} C, 평균 일사량 {avg_wind_or_insol:.2f}' if target_energy == '태양광 (Solar)' else f'평균 기온 {avg_temp:.1f} C, 평균 풍속 {avg_wind_or_insol:.2f}')
+                pdf.add_bullet(2, '3. 발전 피크 분석 : ', f'피크 시각 {peak_hour:02d}:00 (순간 최대 {peak_energy:.2f} MWh 예상)')
 
                 # ==================== 2페이지 작성 (Ⅴ, Ⅵ) ====================
                 pdf.add_page()
@@ -545,9 +569,10 @@ def render_report_tab(wind_df, solar_df):
                     pdf.ln(5)
 
                 pdf.set_font('Malgun', 'B', 10)
-                pdf.cell(0, 6, '  1. 시계열 흐름 분석 의견 :', border=0, ln=1)
+                pdf.add_bullet(2, '1. 시계열 흐름 분석 의견 :', '', h=6)
                 pdf.set_font('Malgun', '', 9)
-                pdf.multi_cell(0, 5, '    가. 인공지능이 도출한 24시간 발전 추세선은 기상 변동 인자와 강한 상관성을 가지며 매끄러운 에너지 기조를 형성함.\n    나. 피크 아워 전후의 급경사 램핑 구간에서 계통 주파수 흔들림이 있을 수 있으니 제어 준비 바람.')
+                pdf.add_bullet(6, '가. ', '인공지능이 도출한 24시간 발전 추세선은 기상 변동 인자와 강한 상관성을 가지며 매끄러운 에너지 기조를 형성함.')
+                pdf.add_bullet(6, '나. ', '피크 아워 전후의 급경사 램핑 구간에서 계통 주파수 흔들림이 있을 수 있으니 제어 준비 바람.')
 
                 # ==================== 3페이지 작성 (Ⅶ, Ⅷ, Ⅸ) ====================
                 pdf.add_page()
@@ -555,26 +580,36 @@ def render_report_tab(wind_df, solar_df):
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_vii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
-                pdf.cell(0, 5.2, '  1. 발전 램핑률(Ramping Rate) 정량 분석 결과 :', ln=1)
-                pdf.cell(0, 5.2, f'    가. 금일 발생 예상되는 최대 시간당 발전량 변동폭 : {max_ramping:.2f} MWh/hr', border=0, ln=1)
-                pdf.cell(0, 5.2, f'    나. 최대 변동성 발생 타겟 시각 : {max_ramping_hour:02d}:00 전후 발생 판정', border=0, ln=1)
-                pdf.multi_cell(0, 5.2, '  2. 계통 영향성 종합 의견 :\n    가. 순간 램핑률이 한계치(30MWh/hr) 미만으로 감지되어 계통 순간 동적 예비력은 안정 범위임.\n    나. 단, 급경사 램핑에 대응하기 위해 기동이 빠른 양수발전기 연계 제어 대기가 필수적임.')
+                pdf.add_bullet(2, '1. 발전 램핑률(Ramping Rate) 정량 분석 결과 :', '', h=5.2)
+                pdf.add_bullet(6, '가. ', f'금일 발생 예상되는 최대 시간당 발전량 변동폭 : {max_ramping:.2f} MWh/hr', h=5.2)
+                pdf.add_bullet(6, '나. ', f'최대 변동성 발생 타겟 시각 : {max_ramping_hour:02d}:00 전후 발생 판정', h=5.2)
+                pdf.ln(2)
+                pdf.add_bullet(2, '2. 계통 영향성 종합 의견 :', '', h=5.2)
+                pdf.add_bullet(6, '가. ', '순간 램핑률이 한계치(30MWh/hr) 미만으로 감지되어 계통 순간 동적 예비력은 안정 범위임.', h=5.2)
+                pdf.add_bullet(6, '나. ', '단, 급경사 램핑에 대응하기 위해 기동이 빠른 양수발전기 연계 제어 대기가 필수적임.', h=5.2)
                 pdf.ln(5)
 
                 title_viii = '\u2167. \uc804\ub825 \uacc4\ud1b5 \uc548\uc815\uc131 \uac80\ud1a0 \ubc0f \uc870\uce58 \uac00\uc774\ub4dc\ub77c\uc778'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_viii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
-                pdf.cell(0, 5.5, f'  1. 계통 위험도 평가 결과 : [{risk_status}] {risk_desc}', border=0, ln=1)
-                pdf.cell(0, 5.5, '  2. 실무 운영 조치 가이드 :', border=0, ln=1)
-                pdf.multi_cell(0, 5.5, f'    가. {guide_a}\n    나. {guide_b}')
+                pdf.add_bullet(2, '1. 계통 위험도 평가 결과 : ', f'[{risk_status}] {risk_desc}', h=5.5)
+                pdf.ln(2)
+                pdf.add_bullet(2, '2. 실무 운영 조치 가이드 :', '', h=5.5)
+                pdf.add_bullet(6, '가. ', guide_a, h=5.5)
+                pdf.add_bullet(6, '나. ', guide_b, h=5.5)
                 pdf.ln(5)
 
                 title_ix = '\u2168. \ud5a5\ud6c4 2\ub2e8\uacc4 \ucd94\uc9c4 \uacc4\ud68d \ubc0f \ucd08\uad6d\uc18c VPP \ucd5c\uc801\ud654 \ub85c\ub4dc\ub9f5'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_ix, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
-                pdf.multi_cell(0, 5.5, '  1. 예측 모델 보정 및 재학습 일정 :\n    가. 실제 발전 실측치와 AI 예측 오차를 분석하여 피드백 오차 보정 학습을 진행함.\n    나. 제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.\n  2. 가상발전소(VPP) 연계망 고도화 :\n    가. 예측 제고 정산금 획득 기준에 최적화되도록 분산 자원 실시간 수집 연계 소프트웨어를 정비할 예정임.')
+                pdf.add_bullet(2, '1. 예측 모델 보정 및 재학습 일정 :', '', h=5.5)
+                pdf.add_bullet(6, '가. ', '실제 발전 실측치와 AI 예측 오차를 분석하여 피드백 오차 보정 학습을 진행함.', h=5.5)
+                pdf.add_bullet(6, '나. ', '제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.', h=5.5)
+                pdf.ln(2)
+                pdf.add_bullet(2, '2. 가상발전소(VPP) 연계망 고도화 :', '', h=5.5)
+                pdf.add_bullet(6, '가. ', '예측 제고 정산금 획득 기준에 최적화되도록 분산 자원 실시간 수집 연계 소프트웨어를 정비할 예정임.', h=5.5)
                 pdf.ln(8)
                 
                 pdf.set_font('Malgun', '', 8.5)
