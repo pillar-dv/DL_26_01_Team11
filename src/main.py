@@ -221,10 +221,8 @@ with tab_wind:
         # AI 확률론적 기상 자동생성 체크박스
         use_stochastic_wind = st.checkbox("🎲 AI 확률론적 기상 자동생성", value=False, key="stochastic_wind")
         
-        # GPS 초국소 단지별 합산 모델 적용 체크박스 (제주도일 때만 노출)
-        use_gps_model = False
-        if sim_region_wind == '제주도':
-            use_gps_model = st.checkbox("📡 GPS 초국소 단지별 합산 모델 적용 (v2)", value=False, key="gps_model_wind")
+        # GPS 초국소 단지별 합산 모델 적용 체크박스 (전 지역 노출로 확대)
+        use_gps_model = st.checkbox("📡 GPS 초국소 단지별 합산 모델 적용 (v2)", value=False, key="gps_model_wind")
 
         sim_wind_speed = st.slider("💨 예상 평균 풍속 (m/s)", 0.0, 30.0, float(round(default_wind, 1)), 0.1, key=f"w_spd_{sim_region_wind}_{future_date_w}", disabled=use_stochastic_wind)
         sim_temp_w = st.slider("🌡️ 예상 평균 기온 (°C)", -15.0, 40.0, float(round(default_temp_w, 1)), 0.5, key=f"w_tmp_{sim_region_wind}_{future_date_w}", disabled=use_stochastic_wind)
@@ -264,7 +262,7 @@ with tab_wind:
                 
                 hourly_preds_w = []
                 
-                if sim_region_wind == '제주도' and use_gps_model:
+                if use_gps_model:
                     preds_gps = {}
                     pred_sum_w = 0.0
                     
@@ -340,7 +338,7 @@ with tab_wind:
                 
                 v_col1, v_col2 = st.columns(2)
                 with v_col1:
-                    if sim_region_wind == '제주도' and use_gps_model:
+                    if use_gps_model:
                         st.markdown("##### 📡 GPS 초국소 단지별 매핑 위치")
                         map_data = []
                         for stage, coords in GPS_FARM_INFO.items():
@@ -358,7 +356,7 @@ with tab_wind:
                         map_df = pd.DataFrame(map_data)
                         if not map_df.empty: st.map(map_df, zoom=6)
                 with v_col2:
-                    if sim_region_wind == '제주도' and use_gps_model:
+                    if use_gps_model:
                         st.markdown("##### 📊 단지별 발전 기여도 비교")
                         import plotly.graph_objects as go
                         stages = list(preds_gps.keys())
@@ -501,7 +499,7 @@ with tab_solar:
                     if not day_df.empty:
                         avg_temp_day = day_df['기온(°C)'].mean()
                         avg_insol_day = day_df['일사(MJ/m2)'].mean()
-                        if avg_insol_day > avg_temp_day:
+                        if avg_insol_day > 10.0:
                             temp_vals = sim_df_s['기온(°C)'].copy()
                             sim_df_s['기온(°C)'] = sim_df_s['일사(MJ/m2)'].copy()
                             sim_df_s['일사(MJ/m2)'] = temp_vals

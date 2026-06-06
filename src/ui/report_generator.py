@@ -163,7 +163,7 @@ def render_report_tab(wind_df, solar_df):
         )
         use_stochastic = st.checkbox('🎲 AI 확률론적 기상 시나리오 적용', value=True, key='rep_stochastic')
         use_gps_v2 = False
-        if target_energy == '풍력 (Wind)' and sel_region == '제주도':
+        if target_energy == '풍력 (Wind)':
             use_gps_v2 = st.checkbox('📡 GPS 초국소 단지별 합산 모델 적용 (v2)', value=False, key='rep_gps')
         st.divider()
         st.markdown('##### ✍️ 기안 정보 기입')
@@ -203,7 +203,7 @@ def render_report_tab(wind_df, solar_df):
                     if not day_df.empty:
                         avg_temp_day = day_df['기온(°C)'].mean()
                         avg_insol_day = day_df['일사(MJ/m2)'].mean()
-                        if avg_insol_day > avg_temp_day:
+                        if avg_insol_day > 10.0:
                             temp_vals = sim_weather_df['기온(°C)'].copy()
                             sim_weather_df['기온(°C)'] = sim_weather_df['일사(MJ/m2)'].copy()
                             sim_weather_df['일사(MJ/m2)'] = temp_vals
@@ -239,7 +239,7 @@ def render_report_tab(wind_df, solar_df):
                                 pred_val = 0.0
                             hourly_preds.append(pred_val)
                 else:
-                    if sel_region == '제주도' and use_gps_v2:
+                    if use_gps_v2:
                         stage_preds = {stg: [] for stg in ['한경1', '한경2', '성산1', '성산2']}
                         for stg in ['한경1', '한경2', '성산1', '성산2']:
                             m_wind_gps = load_wind_gps_model(stg)
@@ -330,8 +330,8 @@ def render_report_tab(wind_df, solar_df):
                     road_study_1 = '실제 발전 실측치와 AI 예측 오차를 분석하여 풍속-출력 비선형 곡선(Power Curve) 보정 학습을 진행함.'
                     road_vpp_2 = '개별 터빈 요잉/피치 제어 연동 기술 및 대용량 풍력단지 통합 VPP 스케줄러를 고도화할 예정임.'
                 
-                if sel_region == '제주도':
-                    road_study_2 = '제주 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.'
+                if use_gps_v2:
+                    road_study_2 = f'{sel_region} 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.'
                 else:
                     road_study_2 = f'{sel_region} 관측소 기상 실측 데이터와의 오차를 피드백하여 피크 오차 보정 학습을 주간 단위로 실시함.'
 
@@ -494,7 +494,7 @@ def render_report_tab(wind_df, solar_df):
                             f'### Ⅲ. 예보 일자 및 타겟 사양 명세\n' \
                             f'  1. **적용 대상 일자** : {formatted_target_date}\n' \
                             f'  2. **분석 타겟 지역** : {sel_region} 행정구역 전역\n' \
-                            f'  3. **적용 예측 모델** : {"LSTM 및 GPS v2 초국소 연합 신경망" if (sel_region == "제주도" and use_gps_v2) else "LSTM 지자체별/지역별 독립 적합 신경망"}\n' \
+                            f'  3. **적용 예측 모델** : {"LSTM 및 GPS v2 초국소 연합 신경망" if use_gps_v2 else "LSTM 지자체별/지역별 독립 적합 신경망"}\n' \
                             f'  4. **기상 입력 모드** : {"AI 확률 날씨 생성 시퀀스" if use_stochastic else "실시간 예보 연동 날씨 데이터"}\n\n' \
                             f'---\n\n' \
                             f'### Ⅳ. 종합 기상 분석 및 발전 예측 요약\n' \
@@ -626,7 +626,7 @@ def render_report_tab(wind_df, solar_df):
                 pdf.set_font('Malgun', '', 9)
                 pdf.add_bullet(2, '1. 적용 대상 일자 : ', formatted_target_date, h=5.2)
                 pdf.add_bullet(2, '2. 분석 타겟 지역 : ', f'{sel_region} 행정구역 전역', h=5.2)
-                pdf.add_bullet(2, '3. 적용 예측 모델 : ', 'LSTM 및 GPS v2 초국소 연합 신경망' if (sel_region == '제주도' and use_gps_v2) else 'LSTM 지자체별/지역별 독립 적합 신경망', h=5.2)
+                pdf.add_bullet(2, '3. 적용 예측 모델 : ', 'LSTM 및 GPS v2 초국소 연합 신경망' if use_gps_v2 else 'LSTM 지자체별/지역별 독립 적합 신경망', h=5.2)
                 pdf.add_bullet(2, '4. 기상 입력 모드 : ', 'AI 확률 날씨 생성 시퀀스' if use_stochastic else '실시간 예보 연동 날씨 데이터', h=5.2)
                 pdf.ln(4)
 
