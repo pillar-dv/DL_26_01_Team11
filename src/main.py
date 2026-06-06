@@ -309,6 +309,18 @@ with tab_wind:
                             pred_actual_w = sy_wind[sim_region_wind].inverse_transform(pred_scaled_w)
                             pred_val = float(np.maximum(pred_actual_w[0][0], 0))
                             hourly_preds_w.append(pred_val)
+                        
+                        # [FIX] 풍력 사후 물리 보정: 풍속³ 법칙 역전 구간 감지 및 교체
+                        # 풍속이 25% 이상 하락했는데 발전량이 10% 이상 증가한 경우는 물리 불가
+                        for h in range(1, 24):
+                            v_curr = float(sim_df_extended.iloc[h]['풍속(m/s)'])
+                            v_prev = float(sim_df_extended.iloc[h - 1]['풍속(m/s)'])
+                            p_curr = hourly_preds_w[h]
+                            p_prev = hourly_preds_w[h - 1]
+                            if v_prev > 0.5 and v_curr < v_prev * 0.75 and p_curr > p_prev * 1.10:
+                                # 풍속³ 비율로 발전량 보정
+                                phys_ratio = (v_curr ** 3) / (v_prev ** 3 + 1e-6)
+                                hourly_preds_w[h] = max(p_prev * phys_ratio, 0.0)
                         sim_result_w = sum(hourly_preds_w)
                     elif sim_region_wind == '제주도' and m_wind_jeju is not None:
                         # XGBoost 폴백 (기존 24시간 통짜 데이터 기반 단일 추론 호환성 유지)
@@ -502,23 +514,18 @@ with tab_solar:
                     sim_df_s = generate_stochastic_weather('solar', sim_region_solar, target_month_s)
                 else:
                     sim_df_s = base_profile_s.copy()
-                    if default_insol > 0: sim_df_s['일사(MJ/m2)'] = sim_df_s['일사(MJ/m2)'] * (sim_insol / default_insol)
-                    else: sim_df_s['일사(MJ/m2)'] = sim_insol
+                    # [FIX] 일사량 비율 조정: 분모 0 방지 + 물리 최대치(6 MJ/m2) 클리핑
+                    if default_insol > 0.01:
+                        ratio_s = sim_insol / default_insol
+                        sim_df_s['일사(MJ/m2)'] = (sim_df_s['일사(MJ/m2)'] * ratio_s).clip(lower=0.0, upper=6.0)
+                    else:
+                        sim_df_s['일사(MJ/m2)'] = sim_insol * (sim_df_s['일사(MJ/m2)'] > 0).astype(float)
                     sim_df_s['기온(°C)'] = sim_df_s['기온(°C)'] + (sim_temp_s - default_temp_s)
                 
                 # 강제 정렬 및 인덱스 초기화로 시간대 매핑 붕괴 방지
                 sim_df_s = sim_df_s.sort_values('시간').reset_index(drop=True)
-                
-                # 태양광 기상 데이터 가드 (기온과 일사량 스왑 오류 방어)
-                if '기온(°C)' in sim_df_s.columns and '일사(MJ/m2)' in sim_df_s.columns:
-                    day_df = sim_df_s[(sim_df_s['시간'] >= 10) & (sim_df_s['시간'] <= 16)]
-                    if not day_df.empty:
-                        avg_temp_day = day_df['기온(°C)'].mean()
-                        avg_insol_day = day_df['일사(MJ/m2)'].mean()
-                        if avg_insol_day > 10.0:
-                            temp_vals = sim_df_s['기온(°C)'].copy()
-                            sim_df_s['기온(°C)'] = sim_df_s['일사(MJ/m2)'].copy()
-                            sim_df_s['일사(MJ/m2)'] = temp_vals
+                # [REMOVED] 스왑 가드 제거: 한국 지상 일사량은 물리적으로 6 MJ/m2를 초과하지 않으므로
+                # avg_insol > 10.0 조건은 절대 발동하지 않으며, 오히려 정상 데이터를 파괴할 위험이 있음
                             
                 # 롤링 예측을 위한 48시간 기상 확장 생성
                 sim_df_extended = pd.concat([sim_df_s, sim_df_s], ignore_index=True)
@@ -544,13 +551,26 @@ with tab_solar:
                         pred_actual_s = sy_solar[sim_region_solar].inverse_transform(pred_scaled_s)
                         pred_val = float(np.maximum(pred_actual_s[0][0], 0))
                         
-                        # 일사량 물리 가드: 일사량이 없거나 밤 시간인 경우 발전량 강제 0
-                        insol_val = sim_df_s.iloc[t]['일사(MJ/m2)']
-                        hour_val = int(sim_df_s.iloc[t]['시간'])
+                        # [FIX] 물리 가드: 훈련 코드 create_dataset과 동일하게
+                        # window = [t, t+23] → 예측 = t+24 시점
+                        # t번째 예측값의 물리 검증 기준은 window 끝 시점(t+23)의 기상
+                        guard_idx = min(t + 23, len(sim_df_extended) - 1)
+                        insol_val = sim_df_extended.iloc[guard_idx]['일사(MJ/m2)']
+                        hour_val  = int(sim_df_extended.iloc[guard_idx]['시간'])
                         if insol_val <= 0.01 or hour_val < 6 or hour_val > 19:
                             pred_val = 0.0
                             
                         hourly_preds_s.append(pred_val)
+                    
+                    # [FIX] 사후 물리 보정: 일사량↑인데 발전량↓인 구간을 완만한 상승으로 교체
+                    for h in range(7, 15):  # 오전 상승 구간(07~14시)
+                        insol_h   = sim_df_s.iloc[h]['일사(MJ/m2)']
+                        insol_hm1 = sim_df_s.iloc[h - 1]['일사(MJ/m2)']
+                        pred_h    = hourly_preds_s[h]
+                        pred_hm1  = hourly_preds_s[h - 1]
+                        # 일사량이 15% 이상 증가했는데 발전량이 5% 이상 감소한 경우 보정
+                        if insol_h > insol_hm1 * 1.15 and pred_h < pred_hm1 * 0.95 and pred_hm1 > 0:
+                            hourly_preds_s[h] = pred_hm1 * (1.0 + (insol_h - insol_hm1) / (insol_hm1 + 1e-6) * 0.5)
                     
                     sim_result_s = sum(hourly_preds_s)
                 else:
