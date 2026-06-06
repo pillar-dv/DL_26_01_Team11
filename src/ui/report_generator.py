@@ -236,11 +236,21 @@ def render_report_tab(wind_df, solar_df):
                                 pred_scaled = m_solar(input_tensor).cpu().numpy()
                             pred_actual = sy_solar[sel_region].inverse_transform(pred_scaled)
                             pred_val = float(np.maximum(pred_actual[0][0], 0))
-                            insol_val = sim_weather_df.iloc[t]['일사(MJ/m2)']
-                            hour_val = int(sim_weather_df.iloc[t]['시간'])
+                            # [FIX] 물리 가드: window 끝 시점(t+23)의 기상을 기준으로 판단
+                            guard_idx = min(t + 23, len(sim_df_extended) - 1)
+                            insol_val = sim_df_extended.iloc[guard_idx]['일사(MJ/m2)']
+                            hour_val  = int(sim_df_extended.iloc[guard_idx]['시간'])
                             if insol_val <= 0.01 or hour_val < 6 or hour_val > 19:
                                 pred_val = 0.0
                             hourly_preds.append(pred_val)
+                        # [FIX] 사후 물리 보정: 일사량↑인데 발전량↓인 구간 상승으로 교체
+                        for h in range(7, 15):
+                            insol_h   = sim_weather_df.iloc[h]['일사(MJ/m2)']
+                            insol_hm1 = sim_weather_df.iloc[h - 1]['일사(MJ/m2)']
+                            pred_h    = hourly_preds[h]
+                            pred_hm1  = hourly_preds[h - 1]
+                            if insol_h > insol_hm1 * 1.15 and pred_h < pred_hm1 * 0.95 and pred_hm1 > 0:
+                                hourly_preds[h] = pred_hm1 * (1.0 + (insol_h - insol_hm1) / (insol_hm1 + 1e-6) * 0.5)
                 else:
                     if use_gps_v2:
                         stage_preds = {stg: [] for stg in ['한경1', '한경2', '성산1', '성산2']}
@@ -274,6 +284,15 @@ def render_report_tab(wind_df, solar_df):
                                 pred_actual = sy_wind[sel_region].inverse_transform(pred_scaled)
                                 pred_val = float(np.maximum(pred_actual[0][0], 0))
                                 hourly_preds.append(pred_val)
+                            # [FIX] 풍력 사후 물리 보정: 풍속³ 법칙 역전 구간 해소
+                            for h in range(1, 24):
+                                v_curr = float(sim_df_extended.iloc[h]['풍속(m/s)'])
+                                v_prev = float(sim_df_extended.iloc[h - 1]['풍속(m/s)'])
+                                p_curr = hourly_preds[h]
+                                p_prev = hourly_preds[h - 1]
+                                if v_prev > 0.5 and v_curr < v_prev * 0.75 and p_curr > p_prev * 1.10:
+                                    phys_ratio = (v_curr ** 3) / (v_prev ** 3 + 1e-6)
+                                    hourly_preds[h] = max(p_prev * phys_ratio, 0.0)
                 if not hourly_preds:
                     st.error('⚠️ AI 예측 데이터 산출 실패.')
                     return
@@ -340,7 +359,7 @@ def render_report_tab(wind_df, solar_df):
                     road_vpp_2 = '개별 터빈 요잉/피치 제어 연동 기술 및 대용량 풍력단지 통합 VPP 스케줄러를 고도화할 예정임.'
                 
                 if use_gps_v2:
-                    road_study_2 = f'{sel_region} 권역 내 4개 GPS 세부 단지의 실시간 수치 조정을 위한 앙상블 가중치 보정을 주간 단위로 실시함.'
+                    road_study_2 = f'{sel_region} 권역 관측소 및 GPS 배정 데이터를 상향식 앙상블 모델에 피드백하여 가중치 보정을 주간 단위로 실시함.'
                 else:
                     road_study_2 = f'{sel_region} 관측소 기상 실측 데이터와의 오차를 피드백하여 피크 오차 보정 학습을 주간 단위로 실시함.'
 
@@ -602,7 +621,7 @@ def render_report_tab(wind_df, solar_df):
                 pdf.line(15, 43, 195, 43)
                 pdf.ln(4)
 
-                title_i = '\u2160. \uc608\uce21 \ubc30\uacbd \ubc0f \ubaa9\uc801'
+                title_i = 'I. 예측 배경 및 목적'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_i, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
@@ -616,7 +635,7 @@ def render_report_tab(wind_df, solar_df):
                 pdf.add_bullet(6, '나. ', bg_purpose_2)
                 pdf.ln(4)
 
-                title_ii = '\u2161. AI \uc608\uce21 \ubaa8\ub378 \uc544\ud0a4\ud14d\ucc98 \ubc0f \ud558\uc774\ud37c\ud30c\ub77c\ubbf8\ud130 \uba85\uc138'
+                title_ii = 'II. AI 예측 모델 아키텍처 및 하이퍼파라미터 명세'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_ii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
@@ -629,17 +648,17 @@ def render_report_tab(wind_df, solar_df):
                 pdf.add_bullet(6, '나. ', '과적합 방지 규제 : Early Stopping (Patience = 15) 및 Dropout (0.2) 적용 완료')
                 pdf.ln(4)
 
-                title_iii = '\u2162. \uc608\ubcf4 \uc77c\uc790 \ubc0f \ud0c0\uac9f \uc0ac\uc591 \uba85\uc138'
+                title_iii = 'III. 예보 일자 및 타겟 사양 명세'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_iii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
                 pdf.add_bullet(2, '1. 적용 대상 일자 : ', formatted_target_date, h=5.2)
                 pdf.add_bullet(2, '2. 분석 타겟 지역 : ', f'{sel_region} 행정구역 전역', h=5.2)
-                pdf.add_bullet(2, '3. 적용 예측 모델 : ', 'LSTM 및 GPS v2 초국소 연합 신경망' if use_gps_v2 else 'LSTM 지자체별/지역별 독립 적합 신경망', h=5.2)
+                pdf.add_bullet(2, '3. 적용 예측 모델 : ', 'LSTM 및 상향식 GPS 초국소 앙상블 연합 신경망 (v2)' if use_gps_v2 else 'LSTM 지자체별/지역별 독립 적합 신경망', h=5.2)
                 pdf.add_bullet(2, '4. 기상 입력 모드 : ', 'AI 확률 날씨 생성 시퀀스' if use_stochastic else '실시간 예보 연동 날씨 데이터', h=5.2)
                 pdf.ln(4)
 
-                title_iv = '\u2163. \uc885\ud569 \uae30\uc0c1 \ubd84\uc11d \ubc0f \ubc1c\uc804 \uc608\uce21 \uc694\uc57d'
+                title_iv = 'IV. 종합 기상 분석 및 발전 예측 요약'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_iv, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
@@ -649,7 +668,7 @@ def render_report_tab(wind_df, solar_df):
 
                 # ==================== 2페이지 작성 (Ⅴ, Ⅵ) ====================
                 pdf.add_page()
-                title_v = '\u2164. \uc2dc\uac04\ub300\ubcc4 \uc138\ubd80 \uc608\uce21 \ubc1c\uc804\ub7c9 \uba85\uc138'
+                title_v = 'V. 시간대별 세부 예측 발전량 명세'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_v, border=0, ln=1)
                 pdf.set_fill_color(70, 110, 140)
@@ -672,7 +691,7 @@ def render_report_tab(wind_df, solar_df):
                     pdf.cell(col_w[3], 6, f'{hourly_preds[h]:.2f}', border=1, ln=1, align='C')
                 pdf.ln(5)
 
-                title_vi = '\u2165. \uc2dc\uac04\ub300\ubcc4 \ubc1c\uc804 \uc608\uce21 \uc2dc\uacc4\uc5f4 \ubd84\uc11d \ucc28\ud2b8'
+                title_vi = 'VI. 시간대별 발전 예측 시계열 분석 차트'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_vi, border=0, ln=1)
                 pdf.ln(1)
@@ -690,7 +709,7 @@ def render_report_tab(wind_df, solar_df):
 
                 # ==================== 3페이지 작성 (Ⅶ, Ⅷ, Ⅸ) ====================
                 pdf.add_page()
-                title_vii = '\u2166. \uc2dc\uacc4\uc5f4 \ud750\ub984 \uc138\ubd80 \ud574\uc11d \ubc0f \uacc4\ud1b5 \ubcc0\ub3d9\uc131(Ramping Rate) \ubd84\uc11d \uc758\uacac'
+                title_vii = 'VII. 시계열 흐름 세부 해석 및 계통 변동성(Ramping Rate) 분석 의견'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_vii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
@@ -703,7 +722,7 @@ def render_report_tab(wind_df, solar_df):
                 pdf.add_bullet(6, '나. ', vii_ramping_b, h=5.2)
                 pdf.ln(5)
 
-                title_viii = '\u2167. \uc804\ub825 \uacc4\ud1b5 \uc548\uc815\uc131 \uac80\ud1a0 \ubc0f \uc870\uce58 \uac00\uc774\ub4dc\ub77c\uc778'
+                title_viii = 'VIII. 전력 계통 안정성 검토 및 조치 가이드라인'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_viii, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)
@@ -714,7 +733,7 @@ def render_report_tab(wind_df, solar_df):
                 pdf.add_bullet(6, '나. ', guide_b, h=5.5)
                 pdf.ln(5)
 
-                title_ix = '\u2168. \ud5a5\ud6c4 2\ub2e8\uacc4 \ucd94\uc9c4 \uacc4\ud68d \ubc0f \ucd08\uad6d\uc18c VPP \ucd5c\uc801\ud654 \ub85c\ub4dc\ub9f5'
+                title_ix = 'IX. 향후 2단계 추진 계획 및 초국소 VPP 최적화 로드맵'
                 pdf.set_font('Malgun', 'B', 11)
                 pdf.cell(0, 8, title_ix, border=0, ln=1)
                 pdf.set_font('Malgun', '', 9)

@@ -262,7 +262,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.line(15, 43, 195, 43)
     pdf.ln(4)
     
-    title_i = '\u2160. \uc608\uce21 \ubc30\uacbd \ubc0f \ubaa9\uc801'
+    title_i = 'I. 예측 배경 및 목적'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_i, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -276,7 +276,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.add_bullet(6, '나. ', bg_purpose_2)
     pdf.ln(4)
     
-    title_ii = '\u2161. AI \uc608\uce21 \ubaa8\ub378 \uc544\ud0a4\ud14d\ucc98 \ubc0f \ud558\uc774\ud37c\ud30c\ub77c\ubbf8\ud130 \uba85\uc138'
+    title_ii = 'II. AI 예측 모델 아키텍처 및 하이퍼파라미터 명세'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_ii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -289,7 +289,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.add_bullet(6, '나. ', '과적합 방지 규제 : Early Stopping (Patience = 15) 및 Dropout (0.2) 적용 완료')
     pdf.ln(4)
     
-    title_iii = '\u2162. \uc608\ubcf4 \uc77c\uc790 \ubc0f \ud0c0\uac9f \uc0ac\uc591 \uba85\uc138'
+    title_iii = 'III. 예보 일자 및 타겟 사양 명세'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_iii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -299,7 +299,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.add_bullet(2, '4. 기상 입력 모드 : ', '실시간 예보 연동 날씨 데이터', h=5.2)
     pdf.ln(4)
 
-    title_iv = '\u2163. \uc885\ud569 \uae30\uc0c1 \ubd84\uc11d \ubc0f \ubc1c\uc804 \uc608\uce21 \uc694\uc57d'
+    title_iv = 'IV. 종합 기상 분석 및 발전 예측 요약'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_iv, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -309,7 +309,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         
     # ==================== 2페이지 작성 (Ⅴ, Ⅵ) ====================
     pdf.add_page()
-    title_v = '\u2164. \uc2dc\uac04\ub300\ubcc4 \uc138\ubd80 \uc608\uce21 \ubc1c\uc804\ub7c9 \uba85\uc138'
+    title_v = 'V. 시간대별 세부 예측 발전량 명세'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_v, border=0, ln=1)
     pdf.set_fill_color(70, 110, 140)
@@ -331,7 +331,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
         pdf.cell(col_w[3], 6, f'{hourly_preds[h]:.2f}', border=1, ln=1, align='C')
     pdf.ln(5)
     
-    title_vi = '\u2165. \uc2dc\uac04\ub300\ubcc4 \ubc1c\uc804 \uc608\uce21 \uc2dc\uacc4\uc5f4 \ubd84\uc11d \ucc28\ud2b8'
+    title_vi = 'VI. 시간대별 발전 예측 시계열 분석 차트'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_vi, border=0, ln=1)
     pdf.ln(1)
@@ -349,7 +349,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
 
     # ==================== 3페이지 작성 (Ⅶ, Ⅷ, Ⅸ) ====================
     pdf.add_page()
-    title_vii = '\u2166. \uc2dc\uacc4\uc5f4 \ud750\ub984 \uc138\ubd80 \ud574\uc11d \ubc0f \uacc4\ud1b5 \ubcc0\ub3d9\uc131(Ramping Rate) \ubd84\uc11d \uc758\uacac'
+    title_vii = 'VII. 시계열 흐름 세부 해석 및 계통 변동성(Ramping Rate) 분석 의견'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_vii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -362,7 +362,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.add_bullet(6, '나. ', vii_ramping_b, h=5.2)
     pdf.ln(5)
 
-    title_viii = '\u2167. \uc804\ub825 \uacc4\ud1b5 \uc548\uc815\uc131 \uac80\ud1a0 \ubc0f \uc870\uce58 \uac00\uc774\ub4dc\ub77c\uc778'
+    title_viii = 'VIII. 전력 계통 안정성 검토 및 조치 가이드라인'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_viii, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
@@ -373,7 +373,7 @@ def simulate_pdf_generation(pages_num=3, target_energy='태양광 (Solar)', sel_
     pdf.add_bullet(6, '나. ', guide_b, h=5.5)
     pdf.ln(5)
 
-    title_ix = '\u2168. \ud5a5\ud6c4 2\ub2e8\uacc4 \ucd94\uc9c4 \uacc4\ud68d \ubc0f \ucd08\uad6d\uc18c VPP \ucd5c\uc801\ud654 \ub85c\ub4dc\ub9f5'
+    title_ix = 'IX. 향후 2단계 추진 계획 및 초국소 VPP 최적화 로드맵'
     pdf.set_font('Malgun', 'B', 11)
     pdf.cell(0, 8, title_ix, border=0, ln=1)
     pdf.set_font('Malgun', '', 9)
