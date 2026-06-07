@@ -268,10 +268,13 @@ class LSTMModel(nn.Module):
         return out
 
 def create_dataset(X, y, time_steps=24):
+    # [FIX] 타겟을 윈도우 끝 시점(i+23)으로 수정
+    # 기존 y[i+24](윤도우 이후 1시간): 일사량 피크(12시) → 발전량 피크(13시) 구조적 시프트 유발
+    # 수정 y[i+23](율돈우 끝 시점): 일사량 피크(12시) → 발전량 피크(12시) 정렬
     Xs, ys = [], []
     for i in range(len(X) - time_steps):
         Xs.append(X[i:(i + time_steps)])
-        ys.append(y[i + time_steps])
+        ys.append(y[i + time_steps - 1])
     return np.array(Xs), np.array(ys)
 
 # 하이퍼파라미터 (경량화 구조 적용)
@@ -329,7 +332,8 @@ for region in solar_df['지역'].unique():
     scaled_y = scaler_y.transform(region_df[[target_solar]])
     
     X_seq, y_seq = create_dataset(scaled_X, scaled_y, 24)
-    dates_seq = region_df['일시'].iloc[24:].reset_index(drop=True)
+    # [FIX] 타겟이 i+23이므로 날짜 매핑도 iloc[23:] 로 조정
+    dates_seq = region_df['일시'].iloc[23:].reset_index(drop=True)
     
     # ── [핵심 교정] 무작위 셔플링 분할로 Covariate Shift 완벽 억제 ──
     n_seq = len(X_seq)
@@ -531,7 +535,8 @@ for region in wind_df['지역'].unique():
     scaled_y = scaler_y.transform(region_df[[target_wind]])
     
     X_seq, y_seq = create_dataset(scaled_X, scaled_y, 24)
-    dates_seq = region_df['일시'].iloc[24:].reset_index(drop=True)
+    # [FIX] 타겟이 i+23이므로 날짜 매핑도 iloc[23:] 로 조정
+    dates_seq = region_df['일시'].iloc[23:].reset_index(drop=True)
     
     # ── [핵심 교정] 무작위 셔플링 분할로 Covariate Shift 완벽 억제 ──
     n_seq = len(X_seq)

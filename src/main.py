@@ -274,7 +274,9 @@ with tab_wind:
                         m_wind_gps = load_wind_gps_model(stage)
                         if m_wind_gps is not None and stage in sx_wind_gps and stage in sy_wind_gps:
                             for t in range(24):
-                                window_df = sim_df_extended.iloc[t : t+24].copy()
+                                # [FIX] 새 모델: window 끝점 = hour t
+                                # extended[t+1 : t+25] → 마지막 요소 = hour t
+                                window_df = sim_df_extended.iloc[t+1 : t+25].copy()
                                 scaled_window = sx_wind_gps[stage].transform(window_df[features_wind])
                                 input_tensor_stage = torch.tensor(scaled_window, dtype=torch.float32).unsqueeze(0).to(device)
                                 with torch.no_grad():
@@ -301,7 +303,8 @@ with tab_wind:
                     m_wind = load_wind_model(sim_region_wind)
                     if m_wind is not None:
                         for t in range(24):
-                            window_df = sim_df_extended.iloc[t : t+24].copy()
+                            # [FIX] 새 모델: window 끝점 = hour t
+                            window_df = sim_df_extended.iloc[t+1 : t+25].copy()
                             scaled_window = sx_wind[sim_region_wind].transform(window_df[features_wind])
                             input_tensor_w = torch.tensor(scaled_window, dtype=torch.float32).unsqueeze(0).to(device)
                             with torch.no_grad():
@@ -543,7 +546,8 @@ with tab_solar:
                 m_solar = load_solar_model(sim_region_solar)
                 if m_solar is not None:
                     for t in range(24):
-                        window_df = sim_df_extended.iloc[t : t+24].copy()
+                        # [FIX] 새 모델: window 끝점 = hour t → extended[t+1:t+25]
+                        window_df = sim_df_extended.iloc[t+1 : t+25].copy()
                         scaled_window = sx_solar[sim_region_solar].transform(window_df[features_solar])
                         input_tensor_s = torch.tensor(scaled_window, dtype=torch.float32).unsqueeze(0).to(device)
                         with torch.no_grad():
@@ -551,10 +555,8 @@ with tab_solar:
                         pred_actual_s = sy_solar[sim_region_solar].inverse_transform(pred_scaled_s)
                         pred_val = float(np.maximum(pred_actual_s[0][0], 0))
                         
-                        # [FIX] 물리 가드: 훈련 코드 create_dataset과 동일하게
-                        # window = [t, t+23] → 예측 = t+24 시점
-                        # t번째 예측값의 물리 검증 기준은 window 끝 시점(t+23)의 기상
-                        guard_idx = min(t + 23, len(sim_df_extended) - 1)
+                        # [FIX] 물리 가드: window 끝점(= hour t)의 기상을 기준
+                        guard_idx = min(t + 24, len(sim_df_extended) - 1)
                         insol_val = sim_df_extended.iloc[guard_idx]['일사(MJ/m2)']
                         hour_val  = int(sim_df_extended.iloc[guard_idx]['시간'])
                         if insol_val <= 0.01 or hour_val < 6 or hour_val > 19:

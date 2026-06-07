@@ -168,10 +168,11 @@ class LSTMModel(nn.Module):
         return self.fc(out[:, -1, :])
 
 def create_dataset(X, y, time_steps=24):
+    # [FIX] 타겟을 요도우 끝 시점(i+23)으로 수정 (일사량/풍속 피크 시간 정렬)
     Xs, ys = [], []
     for i in range(len(X) - time_steps):
         Xs.append(X[i:(i + time_steps)])
-        ys.append(y[i + time_steps])
+        ys.append(y[i + time_steps - 1])
     return np.array(Xs), np.array(ys)
 
 features_wind = ['기온(°C)', '풍속(m/s)', '풍속_세제곱', '풍향(16방위)', '습도(%)', '현지기압(hPa)', '전운량(10분위)', '시간_sin', '시간_cos', '월_sin', '월_cos']

@@ -37,10 +37,11 @@ class LSTMModel(nn.Module):
         return out
 
 def create_dataset(X, y, time_steps=24):
+    # [FIX] 타겟을 윈돈우 끝 시점(i+23)으로 수정
     Xs, ys = [], []
     for i in range(len(X) - time_steps):
         Xs.append(X[i:(i + time_steps)])
-        ys.append(y[i + time_steps])
+        ys.append(y[i + time_steps - 1])
     return np.array(Xs), np.array(ys)
 
 print("데이터 로딩 중...")
