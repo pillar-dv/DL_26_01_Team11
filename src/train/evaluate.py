@@ -35,7 +35,7 @@ def create_dataset(X, y, time_steps=24):
     Xs, ys = [], []
     for i in range(len(X) - time_steps):
         Xs.append(X[i:(i + time_steps)])
-        ys.append(y[i + time_steps])
+        ys.append(y[i + time_steps - 1])  # [FIX] 윈도우 끝 시점 타겟 (피크 시간 정렬)
     return np.array(Xs), np.array(ys)
 
 def evaluate_baseline_solar():
