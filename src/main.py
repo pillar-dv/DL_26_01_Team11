@@ -294,6 +294,16 @@ with tab_wind:
                                 pred_val = float(np.maximum(pred_actual_stage[0][0], 0))
                                 stage_hourly_series[stage].append(pred_val)
                             
+                            # [FIX] 물리 법칙 기반 시간대별 재분배 (Confounding Bias 보정)
+                            # 단지별 총 발전량 스케일은 AI의 일일 예측치 합산으로 유지하되, 시간대별 분포는 물리 법칙(풍속³)에 비례하도록 재정렬
+                            stage_total = sum(stage_hourly_series[stage])
+                            v_cubed = sim_df_w['풍속(m/s)'].values ** 3
+                            v_cubed_sum = sum(v_cubed)
+                            if v_cubed_sum > 0:
+                                stage_hourly_series[stage] = [stage_total * (v_cubed[t] / v_cubed_sum) for t in range(24)]
+                            else:
+                                stage_hourly_series[stage] = [0.0] * 24
+                                
                             stage_sum = sum(stage_hourly_series[stage])
                             preds_gps[stage] = stage_sum
                             pred_sum_w += stage_sum
@@ -322,17 +332,16 @@ with tab_wind:
                             pred_val = float(np.maximum(pred_actual_w[0][0], 0))
                             hourly_preds_w.append(pred_val)
                         
-                        # [FIX] 풍력 사후 물리 보정: 풍속³ 법칙 역전 구간 감지 및 교체
-                        # 풍속이 25% 이상 하락했는데 발전량이 10% 이상 증가한 경우는 물리 불가
-                        for h in range(1, 24):
-                            v_curr = float(sim_df_extended.iloc[h]['풍속(m/s)'])
-                            v_prev = float(sim_df_extended.iloc[h - 1]['풍속(m/s)'])
-                            p_curr = hourly_preds_w[h]
-                            p_prev = hourly_preds_w[h - 1]
-                            if v_prev > 0.5 and v_curr < v_prev * 0.75 and p_curr > p_prev * 1.10:
-                                # 풍속³ 비율로 발전량 보정
-                                phys_ratio = (v_curr ** 3) / (v_prev ** 3 + 1e-6)
-                                hourly_preds_w[h] = max(p_prev * phys_ratio, 0.0)
+                        # [FIX] 물리 법칙 기반 시간대별 재분배 (Confounding Bias 보정)
+                        # 총 발전량 스케일은 AI의 일일 예측치 합산으로 유지하되, 시간대별 분포는 물리 법칙(풍속³)에 비례하도록 재정렬
+                        daily_total_w = sum(hourly_preds_w)
+                        v_cubed = sim_df_w['풍속(m/s)'].values ** 3
+                        v_cubed_sum = sum(v_cubed)
+                        if v_cubed_sum > 0:
+                            hourly_preds_w = [daily_total_w * (v_cubed[t] / v_cubed_sum) for t in range(24)]
+                        else:
+                            hourly_preds_w = [0.0] * 24
+                            
                         sim_result_w = sum(hourly_preds_w)
                     elif sim_region_wind == '제주도' and m_wind_jeju is not None:
                         # XGBoost 폴백 (기존 24시간 통짜 데이터 기반 단일 추론 호환성 유지)
@@ -341,7 +350,14 @@ with tab_wind:
                         pred_scaled_w = m_wind_jeju.predict(input_flat).reshape(-1, 1)
                         pred_actual_w = sy_wind[sim_region_wind].inverse_transform(pred_scaled_w)
                         sim_result_w = float(np.maximum(pred_actual_w[0][0], 0))
-                        hourly_preds_w = [sim_result_w / 24.0] * 24
+                        
+                        # [FIX] 물리 법칙 기반 시간대별 재분배
+                        v_cubed = sim_df_w['풍속(m/s)'].values ** 3
+                        v_cubed_sum = sum(v_cubed)
+                        if v_cubed_sum > 0:
+                            hourly_preds_w = [sim_result_w * (v_cubed[t] / v_cubed_sum) for t in range(24)]
+                        else:
+                            hourly_preds_w = [0.0] * 24
                     else:
                         st.error("풍력 모델을 찾을 수 없습니다. generator.py 및 train_jeju.py 학습 상태를 확인하세요.")
                         sim_result_w = 0.0
