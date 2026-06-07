@@ -101,6 +101,10 @@ pip install -r requirements.txt
 ```bash
 streamlit run src/main.py
 ```
+또는
+```bash
+python -m streamlit run src/main.py
+```
 
 ### 2. 모델 재학습 (Training)
 전국/광역 모델을 재학습하고 스케일러 및 신규 모델 가중치를 생성합니다.
