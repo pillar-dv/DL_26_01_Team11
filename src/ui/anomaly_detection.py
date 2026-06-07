@@ -61,19 +61,34 @@ def render_anomaly_tab(wind_df, solar_df):
                     anomaly_profile.append(base * f_v)
                 
                 elif event_type == "한파 및 한설 (태양광 패널 결빙)":
-                    # 낮 시간에만 발전하는 태양광
-                    base = max(0.0, np.sin(2 * np.pi * (h - 6) / 12) * 150) if 6 <= h <= 18 else 0.0
+                    # 낮 시간에만 발전하는 태양광 (6시~18시 반주기 정현파 적용으로 정오 피크 구현)
+                    base = max(0.0, np.sin(np.pi * (h - 6) / 12) * 150) if 6 <= h <= 18 else 0.0
                     normal_profile.append(base)
-                    if sim_temp <= -10.0:
-                        anomaly_profile.append(base * 0.15) # 85% 감쇠
+                    
+                    # 한파 기온별 결빙 물리 특성 반영 (불연속 급감 제거 및 연속적인 선형 감하)
+                    if sim_temp >= 0.0:
+                        f_t = 1.0
+                    elif sim_temp > -10.0:
+                        # 0°C에서 1.0, -10°C에서 0.15로 부드럽게 선형 감소 (결빙 진행 과정 모사)
+                        f_t = 1.0 - (0.0 - sim_temp) * 0.085
                     else:
-                        anomaly_profile.append(base * (1.0 - max(0.0, -sim_temp / 40.0)))
+                        # -10°C 이하: 완전 결빙 상태, -20°C까지 0.15에서 0.05로 미세 감소
+                        f_t = max(0.05, 0.15 - (-10.0 - sim_temp) * 0.01)
+                    
+                    anomaly_profile.append(base * f_t)
                         
                 elif event_type == "미세먼지 폭발 (일사량 차단)":
-                    base = max(0.0, np.sin(2 * np.pi * (h - 6) / 12) * 150) if 6 <= h <= 18 else 0.0
+                    # 낮 시간에만 발전하는 태양광 (6시~18시 반주기 정현파 적용으로 정오 피크 구현)
+                    base = max(0.0, np.sin(np.pi * (h - 6) / 12) * 150) if 6 <= h <= 18 else 0.0
                     normal_profile.append(base)
-                    # 미세먼지 농도에 비례한 일사 감쇠
-                    attenuation = max(0.2, 1.0 - (sim_pm / 1000.0))
+                    
+                    # 대기 청정 임계치 반영 및 미세먼지 농도에 비례한 일사 감쇠 (청정일 0% 손실 보정)
+                    if sim_pm <= 50.0:
+                        attenuation = 1.0  # 50㎍/㎥ 이하 청정 대기: 일사 감쇠 없음
+                    else:
+                        # 50㎍/㎥ 초과 ~ 800㎍/㎥ 범위: 최대 80% 손실 (0.2 감쇠)까지 선형 감하
+                        attenuation = 1.0 - (sim_pm - 50.0) / (800.0 - 50.0) * 0.8
+                    
                     anomaly_profile.append(base * attenuation)
             
             fig = go.Figure()
