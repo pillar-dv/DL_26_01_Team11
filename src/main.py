@@ -226,8 +226,11 @@ with tab_wind:
         # AI 확률론적 기상 자동생성 체크박스
         use_stochastic_wind = st.checkbox("🎲 AI 확률론적 기상 자동생성", value=False, key="stochastic_wind")
         
-        # GPS 초국소 단지별 합산 모델 적용 체크박스 (전 지역 노출로 확대)
-        use_gps_model = st.checkbox("📡 GPS 초국소 단지별 합산 모델 적용 (v2)", value=False, key="gps_model_wind")
+        # GPS 초국소 단지별 합산 모델 적용 체크박스 (제주도 지역 전용으로 제한)
+        if sim_region_wind == "제주도":
+            use_gps_model = st.checkbox("📡 GPS 초국소 단지별 합산 모델 적용 (v2)", value=False, key="gps_model_wind")
+        else:
+            use_gps_model = False
 
         sim_wind_speed = st.slider("💨 예상 평균 풍속 (m/s)", 0.0, 30.0, float(round(default_wind, 1)), 0.1, key=f"w_spd_{sim_region_wind}_{future_date_w}", disabled=use_stochastic_wind)
         sim_temp_w = st.slider("🌡️ 예상 평균 기온 (°C)", -15.0, 40.0, float(round(default_temp_w, 1)), 0.5, key=f"w_tmp_{sim_region_wind}_{future_date_w}", disabled=use_stochastic_wind)
