@@ -128,12 +128,12 @@ python tests/test_inference.py
 
 | 항목 | 태양광 모델 (Solar) | 풍력 모델 (Wind) |
 |---|---|---|
-| **기반 아키텍처** | LSTM (2-Layered) | XGBoostRegressor |
-| **최적화 옵티마이저** | Adam | - |
-| **손실 함수 (Loss)** | MSE | - |
-| **학습률 스케줄러** | ReduceLROnPlateau | - |
-| **Early Stopping** | patience=20 | Early Stopping Rounds=10 |
-| **입력 시퀀스 길이** | 과거 24시간 연속 기상 데이터 | 현재 시각 기상 + 과거 래그(Lag) 정보 |
+| **기반 아키텍처** | LSTM (1-Layered) | LSTM (1-Layered) (XGBoost는 제주 폴백으로만 유지) |
+| **최적화 옵티마이저** | Adam | Adam |
+| **손실 함수 (Loss)** | MSE | MSE |
+| **학습률 스케줄러** | ReduceLROnPlateau | ReduceLROnPlateau |
+| **Early Stopping** | patience=15 | patience=15 |
+| **입력 시퀀스 길이** | 과거 24시간 연속 기상 데이터 | 과거 24시간 연속 기상 데이터 |
 | **출력 타겟** | 향후 1시간 발전량 (MWh) | 향후 1시간 발전량 (MWh) |
 
 ---
@@ -159,24 +159,22 @@ python tests/test_inference.py
 
 ### **train_national.py (구 generator.py)**
 * **이전**: 학습 시 모든 데이터를 단일 LSTM 모델로 묶어 통합 학습하여 지역별 편차 반영 불가.
-* **현재**: 지역별 독립 LSTM(태양광) 및 XGBoost(풍력) 파이프라인으로 완전 전환하고, 데이터 누수 방지를 위한 엄밀한 Train/Val/Test 분할 적용.
+* **현재**: 지역별 독립 LSTM(태양광 및 풍력) 파이프라인으로 완전 전환하고, 데이터 누수 방지를 위한 엄밀한 Train/Val/Test 분할 적용.
 
 ---
 
-## 📊 모델 성능 지표
+## 📊 모델 성능 지표 (v5.0 기준)
 
 **태양광 LSTM (지자체별 주요 Improved 성능)**
-* **전국 평균**: R² 0.9146 | MAE 19.95 MWh | RMSE 61.66 MWh | MAPE 25.15%
+* **전국 평균 (17개 지자체)**: R² 0.9329 | MAE 14.85 MWh | RMSE 25.43 MWh | MAPE 19.25%
 
-**풍력 모델 (지자체별 Improved 성능)**
-* **일반 지역 (XGBoost Regressor 적용)**:
-  * **강원도**: R² 0.7555 | MAE 36.90 MWh | RMSE 48.28 MWh
-  * **경상북도**: R² 0.7151 | MAE 35.23 MWh | RMSE 47.36 MWh
-  * **전라북도**: R² 0.6329 | MAE 8.03 MWh | RMSE 10.75 MWh
-  * **육지전체**: R² 0.7917 | MAE 101.36 MWh | RMSE 130.00 MWh
-* **제주도 지역 (전용 LSTM 모델 적용)**:
-  * 제주도의 독특한 도서 기후 및 계통적 특성으로 인해 풍력 모델은 XGBoost 대신 **제주도 전용 LSTM 시계열 모델**이 독립적으로 구축되었습니다.
-  * **제주도 풍력 LSTM**: R² 0.5101 | MAE 22.56 MWh | RMSE 33.82 MWh
+**풍력 LSTM (지자체별 전 지역 LSTM 통합 적용 및 기상 매핑 최적화 성능)**
+* **지자체별 독립 LSTM 모델**:
+  * **강원도**: R² 0.8118 | MAE 32.22 MWh | RMSE 41.91 MWh | sMAPE 74.39%
+  * **경상북도**: R² 0.7979 | MAE 29.72 MWh | RMSE 39.64 MWh | sMAPE 64.67% (기상국 정밀화로 대폭 개선)
+  * **전라북도**: R² 0.6697 | MAE 7.35 MWh | RMSE 10.15 MWh | sMAPE 103.73%
+  * **제주도**: R² 0.5393 | MAE 22.03 MWh | RMSE 32.86 MWh | sMAPE 109.12% (LSTM 통합 구축)
+  * **육지전체**: R² 0.8328 | MAE 90.38 MWh | RMSE 116.04 MWh | sMAPE 40.71%
 
 ---
 
