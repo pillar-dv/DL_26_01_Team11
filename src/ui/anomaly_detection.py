@@ -45,12 +45,20 @@ def render_anomaly_tab(wind_df, solar_df):
                 if event_type == "태풍 및 강풍 (풍력 Cut-out)":
                     base = max(0.0, np.sin(2 * np.pi * h / 24) * 80 + 100)
                     normal_profile.append(base)
-                    if sim_wind >= 25.0:
-                        anomaly_profile.append(0.0) # 강풍 차단
+                    # 풍력 터빈의 풍속별 발전 특성 곡선 및 고풍속 제어 반영
+                    if sim_wind < 3.0:
+                        f_v = 0.0  # Cut-in 풍속 미만 (발전 정지)
+                    elif sim_wind < 12.0:
+                        f_v = ((sim_wind - 3.0) / 9.0) ** 3  # 운전 개시 및 출력 상승 구간
+                    elif sim_wind < 20.0:
+                        f_v = 1.0  # 정격 출력 구간
+                    elif sim_wind < 25.0:
+                        # 20m/s ~ 25m/s 구간: 태풍/강풍 경고 수치 근접 시 돌풍 보호 및 기기 제어(Soft Cut-out)로 발전량 점진적 감쇠
+                        f_v = 1.0 - (sim_wind - 20.0) / 5.0
                     else:
-                        # 풍속에 비례한 일반 발전 (3제곱 비례 적용)
-                        scale_factor = (sim_wind / 12.0) ** 3
-                        anomaly_profile.append(min(base * scale_factor, 250.0))
+                        f_v = 0.0  # 25m/s 이상: 강풍 터빈 파손 방지 강제 차단(Cut-out)
+                    
+                    anomaly_profile.append(base * f_v)
                 
                 elif event_type == "한파 및 한설 (태양광 패널 결빙)":
                     # 낮 시간에만 발전하는 태양광
