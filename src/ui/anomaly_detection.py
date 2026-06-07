@@ -99,12 +99,31 @@ def render_anomaly_tab(wind_df, solar_df):
             metric_c1.metric("예상 손실 전력량", f"{total_normal - total_anomaly:.2f} MWh")
             metric_c2.metric("발전량 감소율", f"{loss_pct:.1f}%")
             
-            if loss_pct > 80.0:
-                st.error("🚨 **심각(Critical) 출력 제어 발령**: 전력망 연계 차단 및 설비 보호 동작이 실행되어 발전이 전면 중단되었습니다.")
-            elif loss_pct > 30.0:
-                st.warning("⚠️ **주의(Warning) 송전 제한**: 급격한 발전 저하로 전력 수급 비상 대비 및 백업 발전원 투입이 권장됩니다.")
-            else:
-                st.success("✅ **안정(Normal) 유지**: 약간의 발전 저하가 있으나 기저 전력망에 미치는 영향은 제한적입니다.")
+            if event_type == "태풍 및 강풍 (풍력 Cut-out)":
+                if sim_wind >= 25.0:
+                    st.error("🚨 **심각(Critical) 발전 차단(Cut-out) 발령**: 25m/s 이상의 강풍으로 인한 터빈 보호를 위해 발전기가 강제 정지(Cut-out)되고 발전이 전면 차단되었습니다.")
+                elif sim_wind >= 20.0:
+                    st.warning("⚠️ **주의(Warning) 고풍속 발전 감하**: 태풍/강풍 한계치 근접에 따른 기기 보호 제어(Soft Cut-out)로 인해 발전량이 크게 저하되었습니다.")
+                elif sim_wind < 4.0:
+                    st.info("ℹ️ **무풍/경풍 상태**: 풍속이 발전 개시 풍속(3m/s) 미만 또는 근접하여 자연적인 발전량 감소 상태입니다 (설비 보호 차단 아님).")
+                else:
+                    st.success("✅ **안정(Normal) 운전**: 풍속이 정상 동작 범위(4m/s ~ 20m/s) 내에 있으며, 설비 차단 우려가 없는 안정적인 발전 상태입니다.")
+            
+            elif event_type == "한파 및 한설 (태양광 패널 결빙)":
+                if sim_temp <= -10.0:
+                    st.error("🚨 **심각(Critical) 패널 결빙**: 영하 10°C 이하의 한파로 인해 태양광 패널 표면이 결빙되어 발전 효율이 극도로 저하되었습니다.")
+                elif sim_temp <= 0.0:
+                    st.warning("⚠️ **주의(Warning) 온도 저하**: 영하의 기온으로 인해 패널 효율 저하 및 부분적 결빙 리스크가 존재합니다.")
+                else:
+                    st.success("✅ **안정(Normal) 유지**: 기온이 영상권으로 패널 결빙 리스크가 없으며 정상적으로 발전이 수행됩니다.")
+                    
+            elif event_type == "미세먼지 폭발 (일사량 차단)":
+                if sim_pm >= 300.0:
+                    st.error(f"🚨 **심각(Critical) 일사 차단**: 미세먼지 농도 {sim_pm}㎍/㎥ 초과로 인한 빛 산란 손실로 가상 일사량이 극도로 급감하였습니다.")
+                elif sim_pm >= 150.0:
+                    st.warning(f"⚠️ **주의(Warning) 대기질 악화**: 황사 및 초미세먼지로 인해 발전 효율의 유의미한 저하가 관측됩니다.")
+                else:
+                    st.success("✅ **안정(Normal) 유지**: 대기질이 보통 수준 이하로 일사량 차단 영향이 미미합니다.")
         else:
             st.info("👈 왼쪽 패널에서 가상 환경 조건을 설정하고 '재해 시뮬레이션 가동'을 눌러 시뮬레이션을 실행해 보세요.")
 
