@@ -29,7 +29,7 @@
 * **모듈러 기반 폴더 구조 리팩토링**
   * 스파게티 형태로 산재해 있던 코드들을 역할별(`src/engine`, `src/train`, `src/ui`)로 분류 수납하고, 엔트리포인트를 `src/main.py`로 단일화했습니다.
   * 복잡하게 얽혀 있던 파일 간 상대 참조 경로를 프로젝트 루트 기준 절대 경로로 전면 보정하여 컴파일 오류를 제거했습니다.
-* **타 PC(교수님 환경) 복제 구동 보장 (Portability Setup)**
+* **타 PC 복제 구동 보장 (Portability Setup)**
   * `requirements.txt`에 웹 구동 및 PDF 빌드 필수 패키지(`streamlit`, `joblib`, `plotly`, `fpdf2`, `xgboost` 등)를 누락 없이 일괄 명시했습니다.
   * `.gitignore` 설정을 보완하여 대용량 원본 데이터는 배제하되, 예측 실행에 필수적인 과거 정제 데이터(`data/processed/*.csv`)와 학습 완료된 가중치/스케일러 파일(`models/**/*.pth`, `models/**/*.pkl`)이 Git에 누락되지 않도록 예외(`!`)로 지정했습니다.
 
