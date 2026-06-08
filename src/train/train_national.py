@@ -691,4 +691,17 @@ logger.info("풍력 지역별 시각화 결과 저장 완료 (lstm_result_wind_a
 
 # 평가 결과 데이터 저장 (성능 비교를 위함)
 joblib.dump({'solar': eval_results_solar, 'wind': eval_results_wind}, os.path.join(NATIONAL_MODEL_PATH, 'improved_metrics.pkl'))
+
+try:
+    logger.info("성능 비교 리포트(performance_comparison.md) 실시간 업데이트 중...")
+    import subprocess
+    evaluate_script = os.path.join(BASE_DIR, 'evaluate.py')
+    result = subprocess.run(['python', evaluate_script], capture_output=True, text=True, encoding='utf-8')
+    if result.returncode == 0:
+        logger.info("성능 비교 리포트 업데이트 완료!")
+    else:
+        logger.error(f"성능 비교 리포트 업데이트 실패: {result.stderr}")
+except Exception as e:
+    logger.error(f"성능 비교 리포트 업데이트 중 오류 발생: {e}")
+
 logger.info("\n=== 모든 지역별 독립 모델 학습이 정상적으로 완료되었습니다! ===")
